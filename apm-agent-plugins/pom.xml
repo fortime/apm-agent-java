@@ -52,6 +52,8 @@
         <module>apm-grails-plugin</module>
         <module>apm-dubbo-plugin</module>
         <module>apm-bootdelegation-plugin</module>
+        <module>apm-play-plugin</module>
+
     </modules>
 
     <dependencies>
