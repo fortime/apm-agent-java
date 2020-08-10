@@ -57,13 +57,20 @@ import net.bytebuddy.asm.Advice.Return;
 import co.elastic.apm.agent.bci.HelperClassManager;
 import co.elastic.apm.agent.bci.VisibleForAdvice;
 import co.elastic.apm.agent.impl.ElasticApmTracer;
+import co.elastic.apm.agent.play2.helper.FilterCreator;
 import co.elastic.apm.agent.play2.helper.TracingFilter;
 import co.elastic.apm.agent.sdk.advice.AssignTo;
-import play.mvc.Http;
+import play.api.inject.Injector;
+import play.mvc.Filter;
 import scala.collection.immutable.Seq;
 
 public class HttpFiltersAdivce {
-    private static final Logger logger = LoggerFactory.getLogger(HttpFiltersAdivce.class);
+    @VisibleForAdvice
+    public static final Logger logger = LoggerFactory.getLogger(HttpFiltersAdivce.class);
+
+    @Nullable
+    @VisibleForAdvice
+    public static Object injector;
 
     @Nullable
     @VisibleForAdvice
@@ -71,11 +78,16 @@ public class HttpFiltersAdivce {
 
     @VisibleForAdvice
     public static HelperClassManager<TracingFilter> helperManager;
+    @VisibleForAdvice
+    public static HelperClassManager<FilterCreator> creatorHelperClassManager ;
 
     public static void init(ElasticApmTracer tracer) {
         HttpFiltersAdivce.tracer = tracer;
         helperManager = HelperClassManager.ForAnyClassLoader.of(tracer,
                                                                 "co.elastic.apm.agent.play2.helper.TracingFilter");
+        creatorHelperClassManager = HelperClassManager.ForAnyClassLoader.of(tracer,
+                                                                "co.elastic.apm.agent.play2.helper.FilterCreator");
+
     }
 
     @Nonnull
@@ -83,7 +95,12 @@ public class HttpFiltersAdivce {
     @Advice.OnMethodExit(suppress = Throwable.class)
     private static Seq<Object> onExit(@Return Object ret) {
         logger.info("advice co.elastic.apm.agent.play2.HttpFiltersAdivce");
-        final TracingFilter filter = helperManager.getForClassLoaderOfClass(Http.RequestHeader.class);
+//        final TracingFilter filter = helperManager.getForClassLoaderOfClass(Http.RequestHeader.class);
+
+        final TracingFilter filter = helperManager.getForClassLoaderOfClass(play.mvc.EssentialAction.class);
+        if (filter == null) {
+            return (Seq) ret;
+        }
         final Seq seq = (Seq) ret;
         final List<Object> filters = new ArrayList<>(seq.size() + 1);
         filters.add(filter);

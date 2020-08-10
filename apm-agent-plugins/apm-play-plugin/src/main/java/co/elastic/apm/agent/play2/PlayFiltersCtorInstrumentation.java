@@ -25,26 +25,24 @@
 package co.elastic.apm.agent.play2;
 
 import static co.elastic.apm.agent.bci.bytebuddy.CustomElementMatchers.classLoaderCanLoadClass;
+import static net.bytebuddy.matcher.ElementMatchers.hasSuperType;
+import static net.bytebuddy.matcher.ElementMatchers.isAnnotatedWith;
+import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
 import static net.bytebuddy.matcher.ElementMatchers.named;
-import static net.bytebuddy.matcher.ElementMatchers.returns;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatcher.Junction;
 
-import co.elastic.apm.agent.impl.ElasticApmTracer;
-
-public class PlayFiltersInstrumentation extends AbstractPlayInstrumentation {
-    private static final Logger logger = LoggerFactory.getLogger(PlayFiltersCtorInstrumentation.class);
+public class PlayFiltersCtorInstrumentation extends AbstractPlayInstrumentation {
+    public static final Logger logger = LoggerFactory.getLogger(PlayFiltersCtorInstrumentation.class);
     private static final String ENHANCE_METHOD = "filters";
-
-    public PlayFiltersInstrumentation(ElasticApmTracer tracer) {
-        HttpFiltersAdivce.init(tracer);
-    }
 
     @Override
     public ElementMatcher<? super TypeDescription> getTypeMatcher() {
@@ -53,11 +51,9 @@ public class PlayFiltersInstrumentation extends AbstractPlayInstrumentation {
 
     @Override
     public ElementMatcher<? super MethodDescription> getMethodMatcher() {
-        final String scala212Seq = "scala.collection.Seq";
-        final String scala213Seq = "scala.collection.immutable.Seq";
-        return named(ENHANCE_METHOD)
-            .and(returns(named(scala212Seq)
-                             .or(named(scala213Seq))));
+        return isConstructor().and(isAnnotatedWith(named("javax.inject.Inject")))
+                              .and(takesArgument(2,
+                                                 hasSuperType(named("play.api.inject.Injector"))));
 
     }
 
@@ -67,8 +63,10 @@ public class PlayFiltersInstrumentation extends AbstractPlayInstrumentation {
         return classLoaderCanLoadClass("play.mvc.EssentialAction");
     }
 
-    @Override
-    public Class<?> getAdviceClass() {
-        return HttpFiltersAdivce.class;
+    @Advice.OnMethodEnter()
+    private static void onEnter(@Advice.Argument(2) Object injector) {
+        logger.info("PlayFiltersCtorInstrumentation enter");
+        HttpFiltersAdivce.injector = injector;
     }
+
 }

@@ -57,10 +57,10 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
-import akka.util.ByteString;
+import akka.stream.Materializer;
 import co.elastic.apm.agent.configuration.CoreConfiguration;
 import co.elastic.apm.agent.impl.ElasticApmTracer;
 import co.elastic.apm.agent.impl.GlobalTracer;
@@ -68,17 +68,15 @@ import co.elastic.apm.agent.impl.context.Request;
 import co.elastic.apm.agent.impl.context.Response;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 import play.api.routing.HandlerDef;
-import play.libs.streams.Accumulator;
-import play.mvc.EssentialAction;
-import play.mvc.EssentialFilter;
+import play.mvc.Filter;
 import play.mvc.Http;
 import play.mvc.Http.Cookie;
-import play.mvc.Http.RequestHeader;
 import play.mvc.Result;
 import play.routing.Router;
 
-public class TracingFilter extends EssentialFilter {
-    private static final Logger logger = LoggerFactory.getLogger(TracingFilter.class);
+@Singleton
+public class TracingFilter2 extends Filter {
+
     private static final String FRAMEWORK_NAME = "Play";
     private static final ServletTransactionHelper servletTransactionHelper;
     private static final ServletTransactionCreationHelper servletTransactionCreationHelper;
@@ -91,21 +89,12 @@ public class TracingFilter extends EssentialFilter {
 
     private final Pattern routePattern = Pattern.compile("\\$(\\w+)\\<\\[\\^/\\]\\+\\>", Pattern.DOTALL);
 
-    @Override
-    public EssentialAction apply(final EssentialAction next) {
-        return new EssentialAction() {
-            @Override
-            public Accumulator<ByteString, Result> apply(RequestHeader requestHeader) {
-                logger.info("befor1");
-                Accumulator<ByteString, Result> vv = next.apply(requestHeader);
-                logger.info("after1");
-                return vv;
-            }
-
-        };
-
+    @Inject
+    public TracingFilter2(Materializer mat) {
+        super(mat);
     }
 
+    @Override
     public CompletionStage<Result> apply(Function<Http.RequestHeader, CompletionStage<Result>> next,
                                          final Http.RequestHeader request) {
         final ElasticApmTracer tracer = GlobalTracer.getTracerImpl();
