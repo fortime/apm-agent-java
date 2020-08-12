@@ -22,21 +22,15 @@
  * under the License.
  * #L%
  */
-package co.elastic.apm.agent.play2;
+package co.elastic.apm.agent.play2.helper;
 
-import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import scala.Option;
 
-import co.elastic.apm.agent.sdk.state.GlobalState;
+final class Utils {
 
-@GlobalState
-public class ServletGlobalState {
-
-    public static final Set<String> nameInitialized = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
-
-    // visible for testing as clearing cache is required between tests execution
-    static void clearServiceNameCache() {
-        nameInitialized.clear();
+    public static <T> T orElse(Option<T> option, T defaultValue) {
+        return option.isDefined() ? option.get() : defaultValue;
     }
+
+    private Utils() {}
 }

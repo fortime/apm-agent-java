@@ -36,28 +36,30 @@ import co.elastic.apm.agent.impl.Tracer;
 import co.elastic.apm.agent.impl.context.web.WebConfiguration;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 import co.elastic.apm.agent.matcher.WildcardMatcher;
-import play.mvc.Http;
+import play.api.mvc.Request;
 
-public class ServletTransactionCreationHelper {
+public class TransactionCreationHelperImpl implements TransactionCreationHelper {
 
-    private static final Logger logger = LoggerFactory.getLogger(ServletTransactionCreationHelper.class);
+    private static final Logger logger = LoggerFactory.getLogger(TransactionCreationHelperImpl.class);
 
     private final Tracer tracer;
     private final WebConfiguration webConfiguration;
+    private final RequestHelper<Request<?>> requestHelper = new RequestHelperImpl();
 
-    public ServletTransactionCreationHelper(ElasticApmTracer tracer) {
+    public TransactionCreationHelperImpl(ElasticApmTracer tracer) {
         this.tracer = tracer;
         webConfiguration = tracer.getConfig(WebConfiguration.class);
     }
 
+    @Override
     @Nullable
-    public Transaction createAndActivateTransaction(Http.RequestHeader request) {
+    public Transaction createAndActivateTransaction(Request<?> request) {
         Transaction transaction = null;
         // only create a transaction if there is not already one
         if (tracer.currentTransaction() == null &&
-            !isExcluded(ServletRequestHeaderGetter.serverPathOf(request), request.path(),
-                        ServletRequestHeaderGetter.userAgentOf(request))) {
-            transaction = tracer.startChildTransaction(request, ServletRequestHeaderGetter.getInstance(),
+            !isExcluded(request.path(),
+                        requestHelper.userAgentOf(request))) {
+            transaction = tracer.startChildTransaction(request, RequestHeaderGetter.getInstance(),
                                                        request.getClass().getClassLoader());
             if (transaction != null) {
                 transaction.activate();
@@ -66,13 +68,13 @@ public class ServletTransactionCreationHelper {
         return transaction;
     }
 
-    private boolean isExcluded(String servletPath, @Nullable String pathInfo,
+    private boolean isExcluded(@Nullable String pathInfo,
                                @Nullable String userAgentHeader) {
         final WildcardMatcher excludeUrlMatcher = WildcardMatcher.anyMatch(webConfiguration.getIgnoreUrls(),
-                                                                           servletPath, pathInfo);
+                                                                           "", pathInfo);
         if (excludeUrlMatcher != null && logger.isDebugEnabled()) {
-            logger.debug("Not tracing this request as the URL {}{} is ignored by the matcher {}",
-                         servletPath, Objects.toString(pathInfo, ""), excludeUrlMatcher);
+            logger.debug("Not tracing this request as the URL{} is ignored by the matcher {}",
+                         Objects.toString(pathInfo, ""), excludeUrlMatcher);
         }
         final WildcardMatcher excludeAgentMatcher = userAgentHeader != null ? WildcardMatcher.anyMatch(
             webConfiguration.getIgnoreUserAgents(), userAgentHeader) : null;
@@ -83,9 +85,10 @@ public class ServletTransactionCreationHelper {
         boolean isExcluded = excludeUrlMatcher != null || excludeAgentMatcher != null;
         if (!isExcluded && logger.isTraceEnabled()) {
             logger.trace(
-                "No matcher found for excluding this request with servlet-path: {}, path-info: {} and User-Agent: {}",
-                servletPath, pathInfo, userAgentHeader);
+                "No matcher found for excluding this request with  path-info: {} and User-Agent: {}",
+                pathInfo, userAgentHeader);
         }
         return isExcluded;
     }
+
 }

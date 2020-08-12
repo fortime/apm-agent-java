@@ -11,9 +11,9 @@
  * the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -24,24 +24,40 @@
  */
 package co.elastic.apm.agent.play2.helper;
 
+import static co.elastic.apm.agent.play2.helper.Utils.orElse;
+
 import javax.annotation.Nullable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import co.elastic.apm.agent.impl.transaction.TextHeaderGetter;
+import play.api.mvc.Request;
+import scala.Option;
+import scala.collection.JavaConversions;
 
-import play.api.inject.Injector;
+class RequestHeaderGetter implements TextHeaderGetter<Request<?>> {
 
-public class FilterCreator {
-    private static final Logger logger = LoggerFactory.getLogger(FilterCreator.class);
-//    public Object injector;
+    private static final RequestHeaderGetter INSTANCE = new RequestHeaderGetter();
+
+    static RequestHeaderGetter getInstance() {
+        return INSTANCE;
+    }
 
     @Nullable
-    public TracingFilter create(Object injector) {
-        if (injector == null) {
-            logger.info("injector null");
-            return null;
-        }
-        return ((Injector) injector).instanceOf(TracingFilter.class);
+    @Override
+    public String getFirstHeader(String headerName, Request<?> request) {
+        Option<String> v = request.headers().get(headerName);
+        return orElse(v, null);
     }
+
+    @Override
+    public <S> void forEach(String headerName, Request<?> request, S state,
+                            HeaderConsumer<String, S> consumer) {
+        final Iterable<String> headers =
+            JavaConversions.asJavaIterable(request.headers().getAll(headerName));
+        for (String header : headers) {
+            consumer.accept(header, state);
+        }
+    }
+
+
 
 }

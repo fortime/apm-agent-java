@@ -27,13 +27,16 @@ package co.elastic.apm.agent.play2.helper;
 import static co.elastic.apm.agent.configuration.CoreConfiguration.EventType.OFF;
 import static co.elastic.apm.agent.impl.transaction.AbstractSpan.PRIO_DEFAULT;
 import static co.elastic.apm.agent.impl.transaction.AbstractSpan.PRIO_LOW_LEVEL_FRAMEWORK;
-import static co.elastic.apm.agent.play2.ServletGlobalState.nameInitialized;
+import static co.elastic.apm.agent.play2.helper.Utils.orElse;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import org.slf4j.Logger;
@@ -48,35 +51,57 @@ import co.elastic.apm.agent.impl.context.TransactionContext;
 import co.elastic.apm.agent.impl.context.Url;
 import co.elastic.apm.agent.impl.context.web.ResultUtil;
 import co.elastic.apm.agent.impl.context.web.WebConfiguration;
+import co.elastic.apm.agent.impl.transaction.AbstractSpan;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 import co.elastic.apm.agent.matcher.WildcardMatcher;
+import play.api.mvc.Cookie;
 import play.mvc.Http;
+import scala.Option;
+import scala.collection.JavaConversions;
+import scala.collection.Seq;
 
-public class ServletTransactionHelper {
+public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Request<?>> {
 
-    public static final String TRANSACTION_ATTRIBUTE = TracingFilter.class.getName() + ".transaction";
+    public static final String TRANSACTION_ATTRIBUTE = TransactionHelperImpl.class.getName() + ".transaction";
 
-    public static final String ASYNC_ATTRIBUTE = TracingFilter.class.getName() + ".async";
+    public static final String ASYNC_ATTRIBUTE = TransactionHelperImpl.class.getName() + ".async";
 
     private static final String CONTENT_TYPE_FROM_URLENCODED = "application/x-www-form-urlencoded";
     private static final WildcardMatcher ENDS_WITH_JSP = WildcardMatcher.valueOf("*.jsp");
 
-    private final Logger logger = LoggerFactory.getLogger(ServletTransactionHelper.class);
+    private final Logger logger = LoggerFactory.getLogger(TransactionHelperImpl.class);
 
-    private final Set<String> METHODS_WITH_BODY = new HashSet<>(Arrays.asList("POST", "PUT", "PATCH", "DELETE"));
+    private final Set<String> METHODS_WITH_BODY = new HashSet<>(
+        Arrays.asList("POST", "PUT", "PATCH", "DELETE"));
     private final CoreConfiguration coreConfiguration;
     private final WebConfiguration webConfiguration;
+    private final ElasticApmTracer tracer;
+    private final RequestHelper<play.api.mvc.Request<?>> requestHelper = new RequestHelperImpl();
 
-    public ServletTransactionHelper(ElasticApmTracer tracer) {
+    public TransactionHelperImpl(ElasticApmTracer tracer) {
         this.coreConfiguration = tracer.getConfig(CoreConfiguration.class);
         this.webConfiguration = tracer.getConfig(WebConfiguration.class);
+        this.tracer = tracer;
     }
 
-    public static void determineServiceName(@Nullable String servletContextName, ClassLoader servletContextClassLoader, @Nullable String contextPath) {
-        if (!nameInitialized.add(contextPath == null ? "null" : contextPath)) {
-            return;
-        }
+    @Override
+    public RequestHelper<play.api.mvc.Request<?>> requestHelper() {
+        return requestHelper;
+    }
 
+    @Override
+    public RequestCompleteCallback createRequestCompleteCallback(Transaction transaction,
+                                                                 play.api.mvc.Request<?> request) {
+        return new RequestCompleteCallback(transaction, request, this);
+    }
+
+    // todo
+    public static void determineServiceName(@Nullable String servletContextName,
+                                            ClassLoader servletContextClassLoader,
+                                            @Nullable String contextPath) {
+//        if (!nameInitialized.add(contextPath == null ? "null" : contextPath)) {
+//            return;
+//        }
 
         @Nullable
         String serviceName = servletContextName;
@@ -96,13 +121,82 @@ public class ServletTransactionHelper {
         }
     }
 
+    // create transaction
+    @Override
+    @Nullable
+    public Transaction createAndActivateTransaction(play.api.mvc.Request<?> request) {
+        Transaction transaction = null;
+        // only create a transaction if there is not already one
+        if (tracer.currentTransaction() == null &&
+            !isExcluded(request.path(),
+                        requestHelper.userAgentOf(request))) {
+            transaction = tracer.startChildTransaction(request, RequestHeaderGetter.getInstance(),
+                                                       request.getClass().getClassLoader());
+            if (transaction != null) {
+                transaction.activate();
+            }
+        }
+        return transaction;
+    }
+
+    private boolean isExcluded(@Nullable String pathInfo,
+                               @Nullable String userAgentHeader) {
+        final WildcardMatcher excludeUrlMatcher = WildcardMatcher.anyMatch(webConfiguration.getIgnoreUrls(),
+                                                                           "", pathInfo);
+        if (excludeUrlMatcher != null && logger.isDebugEnabled()) {
+            logger.debug("Not tracing this request as the URL{} is ignored by the matcher {}",
+                         Objects.toString(pathInfo, ""), excludeUrlMatcher);
+        }
+        final WildcardMatcher excludeAgentMatcher = userAgentHeader != null ? WildcardMatcher.anyMatch(
+            webConfiguration.getIgnoreUserAgents(), userAgentHeader) : null;
+        if (excludeAgentMatcher != null) {
+            logger.debug("Not tracing this request as the User-Agent {} is ignored by the matcher {}",
+                         userAgentHeader, excludeAgentMatcher);
+        }
+        boolean isExcluded = excludeUrlMatcher != null || excludeAgentMatcher != null;
+        if (!isExcluded && logger.isTraceEnabled()) {
+            logger.trace(
+                "No matcher found for excluding this request with  path-info: {} and User-Agent: {}",
+                pathInfo, userAgentHeader);
+        }
+        return isExcluded;
+    }
+
+    @Override
+    public void fillRequestContext(@Nonnull Transaction transaction, play.api.mvc.Request<?> request) {
+        final co.elastic.apm.agent.impl.context.Request req = transaction.getContext().getRequest();
+        if (transaction.isSampled() && tracer.getConfig(CoreConfiguration.class).isCaptureHeaders()) {
+            if (request.cookies() != null) {
+                final Iterable<Cookie> cookies = JavaConversions.asJavaIterable(
+                    request.cookies().toIterable());
+                for (Cookie cookie : cookies) {
+                    req.addCookie(cookie.name(), cookie.value());
+                }
+            }
+            final Map<String, Seq<String>> headersMap = JavaConversions.asJavaMap(request.headers().toMap());
+            for (Entry<String, Seq<String>> h : headersMap.entrySet()) {
+                req.addHeader(h.getKey(), JavaConversions.asJavaEnumeration(h.getValue().toIterator()));
+            }
+        }
+        fillRequestContext(transaction, requestHelper.protocolOf(request),
+                           request.method(), requestHelper.secure(request),
+                           requestHelper.schemaOf(request), requestHelper.serverNameOf(request),
+                           requestHelper.serverPortOf(request), request.uri(),
+                           requestHelper.queryStringOf(request),
+                           request.remoteAddress(),
+                           orElse(request.contentType(), null));
+    }
+
+    @Override
     public void fillRequestContext(Transaction transaction, String protocol, String method, boolean secure,
-                                   String scheme, String serverName, int serverPort, String requestURI, String queryString,
+                                   String scheme, String serverName, int serverPort, String requestURI,
+                                   String queryString,
                                    String remoteAddr, @Nullable String contentTypeHeader) {
 
         final Request request = transaction.getContext().getRequest();
         startCaptureBody(transaction, method, contentTypeHeader);
-        fillRequest(request, protocol, method, secure, scheme, serverName, serverPort, requestURI, queryString, remoteAddr);
+        fillRequest(request, protocol, method, secure, scheme, serverName, serverPort, requestURI, queryString,
+                    remoteAddr);
     }
 
     private void startCaptureBody(Transaction transaction, String method, @Nullable String contentTypeHeader) {
@@ -123,7 +217,9 @@ public class ServletTransactionHelper {
                 if (contentTypeHeader == null) {
                     logger.debug("Not capturing request body because couldn't find Content-Type header");
                 } else if (!contentTypeHeader.startsWith(CONTENT_TYPE_FROM_URLENCODED)) {
-                    logger.debug("Not capturing body for content type \"{}\". Consider updating the capture_body_content_types " +
+                    logger.debug(
+                        "Not capturing body for content type \"{}\". Consider updating the capture_body_content_types "
+                        +
                         "configuration option.", contentTypeHeader);
                 }
             }
@@ -137,20 +233,32 @@ public class ServletTransactionHelper {
         }
     }
 
+    @Override
     public void onAfter(Transaction transaction, @Nullable Throwable exception, boolean committed, int status,
-                        boolean overrideStatusCodeOnThrowable, String method, @Nullable Map<String, String[]> parameterMap,
-                        @Nullable String servletPath, @Nullable String pathInfo, @Nullable String contentTypeHeader, boolean deactivate) {
+                        boolean overrideStatusCodeOnThrowable, String method,
+                        boolean deactivate) {
+        onAfter(transaction, exception, committed, status, overrideStatusCodeOnThrowable,
+                method, null, null, null, null, deactivate);
+    }
+
+    @Override
+    public void onAfter(Transaction transaction, @Nullable Throwable exception, boolean committed, int status,
+                        boolean overrideStatusCodeOnThrowable, String method,
+                        @Nullable Map<String, String[]> parameterMap,
+                        @Nullable String servletPath, @Nullable String pathInfo,
+                        @Nullable String contentTypeHeader, boolean deactivate) {
         if (servletPath == null) {
             // the servlet path is specified as non-null but WebLogic does return null...
             servletPath = "";
         }
         try {
             // thrown the first time a JSP is invoked in order to register it
-            if (exception != null && "weblogic.servlet.jsp.AddToMapException".equals(exception.getClass().getName())) {
+            if (exception != null && "weblogic.servlet.jsp.AddToMapException".equals(
+                exception.getClass().getName())) {
                 transaction.ignoreTransaction();
             } else {
                 doOnAfter(transaction, exception, committed, status, overrideStatusCodeOnThrowable, method,
-                    parameterMap, servletPath, pathInfo, contentTypeHeader)
+                          parameterMap, servletPath, pathInfo, contentTypeHeader)
                 ;
             }
         } catch (RuntimeException e) {
@@ -163,8 +271,10 @@ public class ServletTransactionHelper {
         transaction.end();
     }
 
-    private void doOnAfter(Transaction transaction, @Nullable Throwable exception, boolean committed, int status,
-                           boolean overrideStatusCodeOnThrowable, String method, @Nullable Map<String, String[]> parameterMap,
+    private void doOnAfter(Transaction transaction, @Nullable Throwable exception, boolean committed,
+                           int status,
+                           boolean overrideStatusCodeOnThrowable, String method,
+                           @Nullable Map<String, String[]> parameterMap,
                            String servletPath, @Nullable String pathInfo, @Nullable String contentTypeHeader) {
         fillRequestParameters(transaction, method, parameterMap, contentTypeHeader);
         if (exception != null && status == 200 && overrideStatusCodeOnThrowable) {
@@ -180,13 +290,15 @@ public class ServletTransactionHelper {
         }
     }
 
-    void applyDefaultTransactionName(String method, String servletPath, @Nullable String pathInfo, Transaction transaction) {
+    void applyDefaultTransactionName(String method, String servletPath, @Nullable String pathInfo,
+                                     Transaction transaction) {
         // JSPs don't contain path params and the name is more telling than the generated servlet class
         if (webConfiguration.isUsePathAsName() || ENDS_WITH_JSP.matches(servletPath, pathInfo)) {
             // should override ServletName#doGet
             StringBuilder transactionName = transaction.getAndOverrideName(PRIO_LOW_LEVEL_FRAMEWORK + 1);
             if (transactionName != null) {
-                WildcardMatcher groupMatcher = WildcardMatcher.anyMatch(webConfiguration.getUrlGroups(), servletPath, pathInfo);
+                WildcardMatcher groupMatcher = WildcardMatcher.anyMatch(webConfiguration.getUrlGroups(),
+                                                                        servletPath, pathInfo);
                 if (groupMatcher != null) {
                     transactionName.append(method).append(' ').append(groupMatcher.toString());
                 } else {
@@ -211,7 +323,9 @@ public class ServletTransactionHelper {
      * for example when the amount of query parameters is longer than the application server allows.
      * In that case, we rather not want that the agent looks like the cause for this.
      */
-    private void fillRequestParameters(Transaction transaction, String method, @Nullable Map<String, String[]> parameterMap, @Nullable String contentTypeHeader) {
+    private void fillRequestParameters(Transaction transaction, String method,
+                                       @Nullable Map<String, String[]> parameterMap,
+                                       @Nullable String contentTypeHeader) {
         Request request = transaction.getContext().getRequest();
         if (hasBody(contentTypeHeader, method)) {
             if (coreConfiguration.getCaptureBody() != OFF && parameterMap != null) {
@@ -222,10 +336,10 @@ public class ServletTransactionHelper {
 
     public boolean captureParameters(String method, @Nullable String contentTypeHeader) {
         return contentTypeHeader != null
-            && contentTypeHeader.startsWith(CONTENT_TYPE_FROM_URLENCODED)
-            && hasBody(contentTypeHeader, method)
-            && coreConfiguration.getCaptureBody() != OFF
-            && WildcardMatcher.isAnyMatch(webConfiguration.getCaptureContentTypes(), contentTypeHeader);
+               && contentTypeHeader.startsWith(CONTENT_TYPE_FROM_URLENCODED)
+               && hasBody(contentTypeHeader, method)
+               && coreConfiguration.getCaptureBody() != OFF
+               && WildcardMatcher.isAnyMatch(webConfiguration.getCaptureContentTypes(), contentTypeHeader);
     }
 
     public Map<String, String[]> parametersOf(Http.RequestHeader request) {
@@ -239,7 +353,8 @@ public class ServletTransactionHelper {
         response.withStatusCode(status);
     }
 
-    private void fillRequest(Request request, String protocol, String method, boolean secure, String scheme, String serverName,
+    private void fillRequest(Request request, String protocol, String method, boolean secure, String scheme,
+                             String serverName,
                              int serverPort, String requestURI, String queryString,
                              String remoteAddr) {
 
@@ -247,15 +362,15 @@ public class ServletTransactionHelper {
         request.withMethod(method);
 
         request.getSocket()
-            .withEncrypted(secure)
-            .withRemoteAddress(remoteAddr);
+               .withEncrypted(secure)
+               .withRemoteAddress(remoteAddr);
 
         request.getUrl()
-            .withProtocol(scheme)
-            .withHostname(serverName)
-            .withPort(serverPort)
-            .withPathname(requestURI)
-            .withSearch(queryString);
+               .withProtocol(scheme)
+               .withHostname(serverName)
+               .withPort(serverPort)
+               .withPathname(requestURI)
+               .withSearch(queryString);
 
         fillFullUrl(request.getUrl(), scheme, serverPort, serverName, requestURI, queryString);
     }
@@ -264,7 +379,8 @@ public class ServletTransactionHelper {
         return METHODS_WITH_BODY.contains(method) && contentTypeHeader != null;
     }
 
-    private void captureParameters(Request request, Map<String, String[]> params, @Nullable String contentTypeHeader) {
+    private void captureParameters(Request request, Map<String, String[]> params,
+                                   @Nullable String contentTypeHeader) {
         if (contentTypeHeader != null && contentTypeHeader.startsWith(CONTENT_TYPE_FROM_URLENCODED)) {
             for (Map.Entry<String, String[]> param : params.entrySet()) {
                 request.addFormUrlEncodedParameters(param.getKey(), param.getValue());
@@ -273,7 +389,8 @@ public class ServletTransactionHelper {
     }
 
     // inspired by org.apache.catalina.connector.Request.getRequestURL
-    private void fillFullUrl(Url url, String scheme, int port, String serverName, String requestURI, @Nullable String queryString) {
+    private void fillFullUrl(Url url, String scheme, int port, String serverName, String requestURI,
+                             @Nullable String queryString) {
         // using a StringBuilder to avoid allocations when constructing the full URL
         final StringBuilder fullUrl = url.getFull();
         if (port < 0) {
@@ -308,7 +425,9 @@ public class ServletTransactionHelper {
         }
     }
 
-    public static void setTransactionNameByServletClass(@Nullable String method, @Nullable Class<?> servletClass, Transaction transaction) {
+    public static void setTransactionNameByServletClass(@Nullable String method,
+                                                        @Nullable Class<?> servletClass,
+                                                        Transaction transaction) {
         if (servletClass == null) {
             return;
         }
@@ -317,7 +436,8 @@ public class ServletTransactionHelper {
             return;
         }
         String servletClassName = servletClass.getName();
-        transactionName.append(servletClassName, servletClassName.lastIndexOf('.') + 1, servletClassName.length());
+        transactionName.append(servletClassName, servletClassName.lastIndexOf('.') + 1,
+                               servletClassName.length());
         if (method != null) {
             transactionName.append('#');
             switch (method) {
@@ -351,4 +471,20 @@ public class ServletTransactionHelper {
     public boolean isCaptureHeaders() {
         return coreConfiguration.isCaptureHeaders();
     }
+
+    //    other helper
+    @Override
+    public Transaction updateSpanName(final Transaction transaction, final play.api.mvc.Request<?> request) {
+        Option<String> pathOption = request.tags().get("ROUTE_PATTERN");
+        if (!pathOption.isEmpty()) {
+            String path = pathOption.get();
+            StringBuilder spanName = transaction.getAndOverrideName(AbstractSpan.PRIO_DEFAULT);
+            if (spanName != null) {
+                spanName.append(request.method()).append(' ').append(path);
+            }
+            return transaction.withName(request.method() + " " + path, PRIO_LOW_LEVEL_FRAMEWORK);
+        }
+        return transaction;
+    }
+
 }

@@ -13,15 +13,29 @@
 
     <properties>
         <apm-agent-parent.base.dir>${project.basedir}/../..</apm-agent-parent.base.dir>
-        <play2.version>2.7.2</play2.version>
+        <play2.version>2.2.1</play2.version>
         <animal.sniffer.skip>true</animal.sniffer.skip>
     </properties>
+
+    <repositories>
+        <repository>
+            <id>typesafe</id>
+            <url>https://repo.typesafe.com/typesafe/releases/</url>
+        </repository>
+    </repositories>
 
     <dependencies>
         <dependency>
             <groupId>com.typesafe.play</groupId>
-            <artifactId>play_2.12</artifactId>
+            <artifactId>play_2.10</artifactId>
             <version>${play2.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.typesafe.netty/netty-http-pipelining -->
+        <dependency>
+            <groupId>com.typesafe.netty</groupId>
+            <artifactId>netty-http-pipelining</artifactId>
+            <version>1.1.4</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
