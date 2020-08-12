@@ -34,7 +34,6 @@ import net.bytebuddy.asm.Advice;
 import co.elastic.apm.agent.bci.VisibleForAdvice;
 import co.elastic.apm.agent.impl.ElasticApmTracer;
 import co.elastic.apm.agent.impl.transaction.Transaction;
-import play.api.mvc.Headers;
 
 public class PlayAdvice2 {
     @VisibleForAdvice
