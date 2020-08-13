@@ -22,7 +22,7 @@
  * under the License.
  * #L%
  */
-package co.elastic.apm.agent.ning.asynchttpclient;
+package co.elastic.apm.agent.ning.httpclient;
 
 import co.elastic.apm.agent.bci.HelperClassManager;
 import co.elastic.apm.agent.bci.TracerAwareInstrumentation;
@@ -81,7 +81,7 @@ public abstract class AbstractAsyncHttpClientInstrumentation extends TracerAware
             synchronized (AbstractAsyncHandlerInstrumentation.class) {
                 if (headerSetterManager == null) {
                     headerSetterManager = HelperClassManager.ForAnyClassLoader.of(tracer,
-                        "co.elastic.apm.agent.asynchttpclient.helper.RequestHeaderSetter"
+                        "co.elastic.apm.agent.ning.httpclient.helper.RequestHeaderSetter"
                     );
                 }
             }

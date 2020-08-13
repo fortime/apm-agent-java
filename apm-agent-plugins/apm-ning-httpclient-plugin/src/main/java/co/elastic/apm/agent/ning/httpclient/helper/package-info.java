@@ -23,6 +23,6 @@
  * #L%
  */
 @NonnullApi
-package co.elastic.apm.agent.ning.asynchttpclient.helper;
+package co.elastic.apm.agent.ning.httpclient.helper;
 
 import co.elastic.apm.agent.sdk.NonnullApi;

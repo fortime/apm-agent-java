@@ -22,7 +22,7 @@
  * under the License.
  * #L%
  */
-package co.elastic.apm.agent.ning.asynchttpclient.helper;
+package co.elastic.apm.agent.ning.httpclient.helper;
 
 
 import com.ning.http.client.Request;

@@ -477,6 +477,7 @@ public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Req
     @Override
     public Transaction fillSpanName(final Transaction transaction, final play.api.mvc.Request<?> request) {
         Option<String> pathOption = request.tags().get("ROUTE_PATTERN");
+//        request.path()
         if (!pathOption.isEmpty()) {
             String path = pathOption.get();
             StringBuilder spanName = transaction.getAndOverrideName(AbstractSpan.PRIO_DEFAULT);

@@ -1,2 +1,1 @@
-co.elastic.apm.agent.play.ws.PlayWSInstrumentation
-
+co.elastic.apm.agent.ning.httpclient.AbstractAsyncHttpClientInstrumentation$AsyncHttpClientInstrumentation
