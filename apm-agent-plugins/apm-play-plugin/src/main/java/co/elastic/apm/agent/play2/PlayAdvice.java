@@ -35,7 +35,6 @@ import co.elastic.apm.agent.bci.VisibleForAdvice;
 import co.elastic.apm.agent.impl.ElasticApmTracer;
 import co.elastic.apm.agent.impl.GlobalTracer;
 import co.elastic.apm.agent.impl.transaction.Transaction;
-import co.elastic.apm.agent.play2.helper.TransactionCreationHelper;
 import co.elastic.apm.agent.play2.helper.TransactionHelper;
 import play.api.mvc.Action;
 import play.api.mvc.Request;
@@ -65,16 +64,15 @@ public class PlayAdvice {
         if (!tracer.isRunning()) {
             return null;
         }
-        final TransactionCreationHelper creationHelper =
-            PlayInstrumentation.creatioHelperClassManager.getForClassLoaderOfClass(Request.class);
+
         final TransactionHelper<Request<?>> transactionHelper =
             PlayInstrumentation.transactionHelperClassManager.getForClassLoaderOfClass(
                 Request.class);
 
-        if (creationHelper == null || transactionHelper == null) {
+        if (transactionHelper == null) {
             return null;
         }
-        final Transaction transaction = creationHelper.createAndActivateTransaction(request);
+        final Transaction transaction = transactionHelper.createAndActivateTransaction(request);
         if (transaction == null) {
             return null;
         }
@@ -98,16 +96,16 @@ public class PlayAdvice {
         if (transaction == null || transactionHelper == null) {
             return;
         }
-//        transaction.withName()
         if (throwable == null) {
             responseFuture.onComplete(
                 transactionHelper.createRequestCompleteCallback(transaction, req),
                 ((Action<?>) thisAction).executionContext());
         } else {
             transactionHelper.onAfter(transaction, throwable, true, 500, true,
-                                      req.method(), true);
+                                      req.method(), false);
         }
-
+        transaction.deactivate();
+        transactionHelper.fillSpanName(transaction,req);
     }
 
 }

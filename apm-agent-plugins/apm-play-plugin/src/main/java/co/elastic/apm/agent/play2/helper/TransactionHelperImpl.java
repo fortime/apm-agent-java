@@ -61,6 +61,7 @@ import scala.collection.JavaConversions;
 import scala.collection.Seq;
 
 public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Request<?>> {
+    private final Logger logger = LoggerFactory.getLogger(TransactionHelperImpl.class);
 
     public static final String TRANSACTION_ATTRIBUTE = TransactionHelperImpl.class.getName() + ".transaction";
 
@@ -69,7 +70,6 @@ public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Req
     private static final String CONTENT_TYPE_FROM_URLENCODED = "application/x-www-form-urlencoded";
     private static final WildcardMatcher ENDS_WITH_JSP = WildcardMatcher.valueOf("*.jsp");
 
-    private final Logger logger = LoggerFactory.getLogger(TransactionHelperImpl.class);
 
     private final Set<String> METHODS_WITH_BODY = new HashSet<>(
         Arrays.asList("POST", "PUT", "PATCH", "DELETE"));
@@ -130,6 +130,7 @@ public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Req
         if (tracer.currentTransaction() == null &&
             !isExcluded(request.path(),
                         requestHelper.userAgentOf(request))) {
+            logger.debug("TT1 start new");
             transaction = tracer.startChildTransaction(request, RequestHeaderGetter.getInstance(),
                                                        request.getClass().getClassLoader());
             if (transaction != null) {
@@ -181,7 +182,7 @@ public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Req
         fillRequestContext(transaction, requestHelper.protocolOf(request),
                            request.method(), requestHelper.secure(request),
                            requestHelper.schemaOf(request), requestHelper.serverNameOf(request),
-                           requestHelper.serverPortOf(request), request.uri(),
+                           requestHelper.serverPortOf(request), request.path(),
                            requestHelper.queryStringOf(request),
                            request.remoteAddress(),
                            orElse(request.contentType(), null));
@@ -474,7 +475,7 @@ public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Req
 
     //    other helper
     @Override
-    public Transaction updateSpanName(final Transaction transaction, final play.api.mvc.Request<?> request) {
+    public Transaction fillSpanName(final Transaction transaction, final play.api.mvc.Request<?> request) {
         Option<String> pathOption = request.tags().get("ROUTE_PATTERN");
         if (!pathOption.isEmpty()) {
             String path = pathOption.get();

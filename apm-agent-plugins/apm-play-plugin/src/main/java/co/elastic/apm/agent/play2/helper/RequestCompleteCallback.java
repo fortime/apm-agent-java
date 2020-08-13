@@ -73,7 +73,7 @@ public class RequestCompleteCallback extends scala.runtime.AbstractFunction1<Try
                 Failure<?> failure = (Failure<?>) result;
                 servletTransactionHelper.onAfter(transaction, failure.exception(), true, 500,
                                                  false, request.method(), null, "",
-                                                 request.path(), null, true
+                                                 request.path(), null, false
                 );
             } else {
                 SimpleResult simpleResult = null;
@@ -95,32 +95,19 @@ public class RequestCompleteCallback extends scala.runtime.AbstractFunction1<Try
                 final String contentTypeHeader = simpleResult == null ? null : orNull(
                     simpleResult.header().headers().get(HeaderNames.CONTENT_TYPE));
 
-                servletTransactionHelper.onAfter(updateSpanName(transaction, request), null, true, status,
+                servletTransactionHelper.onAfter(transaction, null, true, status,
                                                  false, request.method(), null, "",
-                                                 request.path(), contentTypeHeader, true
+                                                 request.path(), contentTypeHeader, false
                 );
             }
 
         } catch (final Throwable t) {
-            transaction.deactivate().end();
+            transaction.end();
             log.info("error in play instrumentation", t);
         }
         return null;
     }
 
-    public Transaction updateSpanName(final Transaction transaction, final play.api.mvc.Request<?> request) {
-//        log.info("tags: {}",request.tags());
-        Option<String> pathOption = request.tags().get("ROUTE_PATTERN");
-        if (!pathOption.isEmpty()) {
-            String path = pathOption.get();
-            StringBuilder spanName = transaction.getAndOverrideName(AbstractSpan.PRIO_DEFAULT);
-            if (spanName!=null) {
-                spanName.append(request.method()).append(' ').append(path);
-            }
-            return transaction.withName(request.method() + " " + path, AbstractSpan.PRIO_METHOD_SIGNATURE);
-        }
-        return transaction;
-    }
 
     @Nullable
     public static String orNull(Option<String> v) {

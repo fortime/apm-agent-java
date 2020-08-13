@@ -35,9 +35,9 @@ import co.elastic.apm.agent.bci.VisibleForAdvice;
 import co.elastic.apm.agent.impl.ElasticApmTracer;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 
-public class PlayAdvice2 {
+public class PlayAdviceDebug {
     @VisibleForAdvice
-    public static final Logger logger = LoggerFactory.getLogger(PlayAdvice2.class);
+    public static final Logger logger = LoggerFactory.getLogger(PlayAdviceDebug.class);
 
     @VisibleForAdvice
     public static final String FRAMEWORK_NAME = "Play";

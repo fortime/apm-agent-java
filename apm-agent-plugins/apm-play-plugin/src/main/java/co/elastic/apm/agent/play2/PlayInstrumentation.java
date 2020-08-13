@@ -27,11 +27,13 @@ package co.elastic.apm.agent.play2;
 import static co.elastic.apm.agent.bci.bytebuddy.CustomElementMatchers.classLoaderCanLoadClass;
 import static net.bytebuddy.matcher.ElementMatchers.hasSuperType;
 import static net.bytebuddy.matcher.ElementMatchers.isBootstrapClassLoader;
+import static net.bytebuddy.matcher.ElementMatchers.nameContains;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.not;
 import static net.bytebuddy.matcher.ElementMatchers.returns;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
+import net.bytebuddy.description.NamedElement;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
@@ -40,21 +42,15 @@ import net.bytebuddy.matcher.ElementMatcher.Junction;
 import co.elastic.apm.agent.bci.HelperClassManager;
 import co.elastic.apm.agent.bci.VisibleForAdvice;
 import co.elastic.apm.agent.impl.ElasticApmTracer;
-import co.elastic.apm.agent.play2.helper.RequestHelper;
 import co.elastic.apm.agent.play2.helper.TransactionHelper;
-import co.elastic.apm.agent.play2.helper.TransactionCreationHelper;
 import play.api.mvc.Request;
 
 public class PlayInstrumentation extends AbstractPlayInstrumentation {
     //    private static final Logger logger = LoggerFactory.getLogger(PlayFiltersCtorInstrumentation.class);
 
-    @VisibleForAdvice
-    public static HelperClassManager<TransactionCreationHelper> creatioHelperClassManager;
-
     // ok to use Request as type erase..
     @VisibleForAdvice
     public static HelperClassManager<TransactionHelper<Request<?>>> transactionHelperClassManager;
-
 
     private final ElasticApmTracer tracer;
 
@@ -63,13 +59,7 @@ public class PlayInstrumentation extends AbstractPlayInstrumentation {
         PlayInstrumentation.init(tracer);
     }
 
-    private synchronized static void init(ElasticApmTracer tracer) {
-        creatioHelperClassManager =
-            HelperClassManager.ForAnyClassLoader.of(tracer,
-                                                    "co.elastic.apm.agent.play2.helper.TransactionCreationHelperImpl",
-                                                    "co.elastic.apm.agent.play2.helper.Utils",
-                                                    "co.elastic.apm.agent.play2.helper.RequestHelperImpl",
-                                                    "co.elastic.apm.agent.play2.helper.RequestHeaderGetter");
+    private static synchronized void init(ElasticApmTracer tracer) {
 
         transactionHelperClassManager =
             HelperClassManager.ForAnyClassLoader.of(tracer,
@@ -80,18 +70,14 @@ public class PlayInstrumentation extends AbstractPlayInstrumentation {
                                                     "co.elastic.apm.agent.play2.helper.RequestCompleteCallback");
     }
 
-//    @Override
-//    public ElementMatcher<? super NamedElement> getTypeMatcherPreFilter() {
-//        return nameContains("play").and(nameContains("Action"));
-//    }
+    @Override
+    public ElementMatcher<? super NamedElement> getTypeMatcherPreFilter() {
+        return nameContains("play");
+    }
 
     @Override
     public ElementMatcher<? super TypeDescription> getTypeMatcher() {
         return hasSuperType(named("play.api.mvc.Action"));
-//        return nameStartsWith("play").and(nameContains("Action")).and(not(nameContains("Annotations")));
-//        return nameStartsWith("play.core").and(nameContains("Action"))
-//                                          .or(nameStartsWith("play.api").and(nameContains("Action")));
-//        return hasSuperType(named("play.core.j.JavaAction"));
     }
 
     @Override
@@ -105,10 +91,7 @@ public class PlayInstrumentation extends AbstractPlayInstrumentation {
 
     @Override
     public Junction<ClassLoader> getClassLoaderMatcher() {
-//        TODO WHY NOT?
-//        return classLoaderCanLoadClass("play.api.mvc.Action");
         return not(isBootstrapClassLoader()).and(classLoaderCanLoadClass("play.api.mvc.Action"));
-//        return any();
     }
 
     @Override

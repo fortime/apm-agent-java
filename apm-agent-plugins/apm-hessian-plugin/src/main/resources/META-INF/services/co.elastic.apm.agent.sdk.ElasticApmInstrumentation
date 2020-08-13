@@ -1,0 +1,4 @@
+co.elastic.apm.agent.hessian.HessianServerInstrumentation
+co.elastic.apm.agent.hessian.AbstractHessianClientInstrumentation$HessianProxySendInstrumentation
+co.elastic.apm.agent.hessian.AbstractHessianClientInstrumentation$HessianProxyInvokeInstrumentation
+co.elastic.apm.agent.hessian.AbstractHessianClientInstrumentation$HessianProxyAndHeaderInstrumentation
