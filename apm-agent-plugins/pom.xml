@@ -54,6 +54,7 @@
         <module>apm-bootdelegation-plugin</module>
         <module>apm-play-plugin</module>
         <module>apm-hessian-plugin</module>
+        <module>apm-ning-httpclient-plugin</module>
     </modules>
 
     <dependencies>

@@ -65,7 +65,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
     public static WeakConcurrentMap<Object, Span> spanMap = WeakMapSupplier.createMap();
 
     @VisibleForAdvice
-    public static final Logger logger = LoggerFactory.getLogger(HessianServerInstrumentation.class);
+    public static final Logger logger = LoggerFactory.getLogger(AbstractHessianClientInstrumentation.class);
 
     @VisibleForAdvice
     public static final String EXTERNAL_TYPE = "external";
