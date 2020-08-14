@@ -24,23 +24,25 @@
  */
 package co.elastic.apm.agent.report;
 
+import static co.elastic.apm.agent.configuration.validation.RangeValidator.isNotInRange;
+
+import java.net.URL;
+import java.util.Collections;
+import java.util.List;
+
+import javax.annotation.Nullable;
+
+import org.stagemonitor.configuration.ConfigurationOption;
+import org.stagemonitor.configuration.ConfigurationOptionProvider;
+import org.stagemonitor.configuration.converter.ListValueConverter;
+import org.stagemonitor.configuration.converter.UrlValueConverter;
+
 import co.elastic.apm.agent.configuration.converter.ByteValue;
 import co.elastic.apm.agent.configuration.converter.ByteValueConverter;
 import co.elastic.apm.agent.configuration.converter.TimeDuration;
 import co.elastic.apm.agent.configuration.converter.TimeDurationValueConverter;
 import co.elastic.apm.agent.matcher.WildcardMatcher;
 import co.elastic.apm.agent.matcher.WildcardMatcherValueConverter;
-import org.stagemonitor.configuration.ConfigurationOption;
-import org.stagemonitor.configuration.ConfigurationOptionProvider;
-import org.stagemonitor.configuration.converter.ListValueConverter;
-import org.stagemonitor.configuration.converter.UrlValueConverter;
-
-import javax.annotation.Nullable;
-import java.net.URL;
-import java.util.Collections;
-import java.util.List;
-
-import static co.elastic.apm.agent.configuration.validation.RangeValidator.isNotInRange;
 
 public class ReporterConfiguration extends ConfigurationOptionProvider {
 
@@ -55,6 +57,16 @@ public class ReporterConfiguration extends ConfigurationOptionProvider {
             "Use if APM Server requires a token.")
         .sensitive()
         .build();
+    private final ConfigurationOption<String> reporterType =
+        ConfigurationOption.stringOption()
+                           .key("report_type")
+                           .configurationCategory(REPORTER_CATEGORY)
+                           .description(
+                               "How to send the report, ApmServer or Log\n"
+                               +
+                               "Set to log will case send all to apm log file.\n"
+                               )
+                           .buildWithDefault("ApmServer");
 
     private final ConfigurationOption<String> apiKey = ConfigurationOption.stringOption()
         .key("api_key")
@@ -184,6 +196,8 @@ public class ReporterConfiguration extends ConfigurationOptionProvider {
         .dynamic(false)
         .buildWithDefault(Collections.<WildcardMatcher>emptyList());
 
+
+
     @Nullable
     public String getSecretToken() {
         return secretToken.get();
@@ -236,6 +250,10 @@ public class ReporterConfiguration extends ConfigurationOptionProvider {
 
     public ConfigurationOption<List<URL>> getServerUrlsOption() {
         return this.serverUrls;
+    }
+
+    public String getReporterType() {
+        return reporterType.get();
     }
 
 }

@@ -39,8 +39,19 @@ public class ReporterFactory {
                                    MetaData metaData) {
 
         ReporterConfiguration reporterConfiguration = configurationRegistry.getConfig(ReporterConfiguration.class);
+
+        if ("Log".equalsIgnoreCase(reporterConfiguration.getReporterType())) {
+            return getLogReporter(configurationRegistry, apmServerClient);
+        }
         ReportingEventHandler reportingEventHandler = getReportingEventHandler(configurationRegistry, reporterConfiguration, metaData, apmServerClient);
         return new ApmServerReporter(true, reporterConfiguration, reportingEventHandler);
+    }
+
+    @Nonnull
+    private LogReporter getLogReporter(ConfigurationRegistry configurationRegistry,
+                                       ApmServerClient apmServerClient){
+        DslJsonSerializer payloadSerializer = new DslJsonSerializer(configurationRegistry.getConfig(StacktraceConfiguration.class), apmServerClient);
+        return new LogReporter(payloadSerializer);
     }
 
     @Nonnull
