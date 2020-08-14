@@ -174,8 +174,8 @@ Other Servlet 3+ compliant servers will most likely work as well.
 |The agent automatically creates DB spans for all your JDBC queries.
  This includes JDBC queries executed by O/R mappers like Hibernate.
 
- *Note:* Make sure that your JDBC driver is at least compiled for Java 1.5.
- For example, commons dbcp versions before 1.4 are not supported.
+ *Note:* Make sure that your JDBC driver is at least compiled for Java 1.4.
+ Drivers compiled with a lower version are not supported.
  IBM DB2 db2jcc drivers are also not supported.
  Please update to db2jcc4.
 |1.0.0
@@ -469,6 +469,11 @@ If you are seeing gaps in the span timeline and want to include additional metho
 |JMX
 |Set the configuration option <<config-capture-jmx-metrics, `capture_jmx_metrics`>> in order to monitor any JMX metric.
 |1.11.0
+
+|Micrometer
+|Automatically detects and reports the metrics of each `MeterRegistry`.
+ See <<metrics-micrometer>> for more details.
+|1.18.0
 
 |===
 
