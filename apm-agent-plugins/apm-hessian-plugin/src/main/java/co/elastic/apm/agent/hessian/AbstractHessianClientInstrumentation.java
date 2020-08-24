@@ -62,12 +62,10 @@ import co.elastic.apm.agent.impl.transaction.TextHeaderSetter;
 import co.elastic.apm.agent.sdk.weakmap.WeakMapSupplier;
 
 /**
- * Get hessian info before servlet instrumentation
+ * update span name. span should created by other network framework
  */
 public abstract class AbstractHessianClientInstrumentation extends AbstractHessianInstrumentation {
 
-    @VisibleForAdvice
-    public static WeakConcurrentSet<Span> spanSet = WeakMapSupplier.createSet();
 
     @VisibleForAdvice
     public static final Logger logger = LoggerFactory.getLogger(AbstractHessianClientInstrumentation.class);
@@ -89,75 +87,6 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
         return named("com.caucho.hessian.client.HessianProxy");
     }
 
-    public static class HessianProxyInvokeInstrumentation extends AbstractHessianClientInstrumentation {
-
-        @Override
-        public ElementMatcher<? super MethodDescription> getMethodMatcher() {
-            return named("invoke")
-                .and(takesArguments(3))
-                .and(takesArgument(0, named("java.lang.Object")))
-                .and(takesArgument(1, named("java.lang.reflect.Method")));
-        }
-
-        @Nullable
-        @OnMethodEnter(suppress = Throwable.class, inline = false)
-        private static Object onEnter(
-            @Advice.FieldValue("_mangleMap") WeakHashMap<Method, String> mangleMap,
-            @Advice.Argument(1) Method method) {
-
-            AbstractSpan<?> traceContext = tracer.getActive();
-            if (traceContext == null) {
-                return null;
-            }
-
-            String mangleName;
-
-            synchronized (mangleMap) {
-                mangleName = mangleMap.get(method);
-            }
-
-            if (mangleName == null) {
-                String methodName = method.getName();
-                Class<?>[] params = method.getParameterTypes();
-
-                // equals and hashCode are special cased
-                if (methodName.equals("equals")
-                    && params.length == 1 && params[0].equals(Object.class)) {
-                    return null;
-                } else if (methodName.equals("hashCode") && params.length == 0) {
-                    return null;
-                } else if (methodName.equals("getHessianType")) {
-                    return null;
-                } else if (methodName.equals("getHessianURL")) { return null; } else if (
-                    methodName.equals("toString") && params.length == 0) {
-                    return null;
-                }
-            }
-
-            Span span = traceContext.createExitSpan();
-            if (span == null) {
-                return null;
-            }
-            logger.debug("createExitSpan");
-            spanSet.add(span);
-            span.withType(EXTERNAL_TYPE)
-                .withSubtype(HESSIAN_SUBTYPE);
-
-            return span.activate();
-        }
-
-        @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class, inline = false)
-        public static void onExit(@Nullable @Advice.Enter Object spanObj,
-                                  @Nullable @Advice.Thrown Throwable t) {
-            if (spanObj != null) {
-                Span span = (Span) spanObj;
-                span.captureException(t);
-                spanSet.remove(span);
-                span.deactivate().end();
-            }
-        }
-    }
-
     // update span name
     public static class HessianProxySendInstrumentation extends AbstractHessianClientInstrumentation {
 
@@ -169,7 +98,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 .and(returns(hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
         }
 
-        @Advice.OnMethodEnter(suppress = Throwable.class, inline = false)
+        @Advice.OnMethodExit(suppress = Throwable.class, inline = false)
         public static void onSendRequest(
             @Advice.This HessianProxy thiz,
             @Advice.FieldValue("_type") Class<?> type,
@@ -204,30 +133,6 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
             if (apiClassName != null && !apiClassName.isEmpty()) {
                 setName(span, apiClassName, methodName);
             }
-        }
-    }
-
-    // propagateTraceContext
-    public static class HessianProxyAddHeaderInstrumentation extends AbstractHessianClientInstrumentation {
-        @VisibleForAdvice
-        public static TextHeaderSetter<HessianConnection> headerSetter = new HessianHeaderSetter();
-
-        @Override
-        public ElementMatcher<? super MethodDescription> getMethodMatcher() {
-            return named("addRequestHeaders")
-                .and(takesArguments(1))
-                .and(takesArgument(0, hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
-        }
-
-        @Advice.OnMethodEnter(suppress = Throwable.class, inline = false)
-        public static void onAddRequestHeaders(@Advice.Argument(0) HessianConnection conn) {
-
-            Span span = tracer.getActiveExitSpan();
-            if (span == null || !spanSet.contains(span)) {
-                return;
-            }
-
-            span.propagateTraceContext(conn, headerSetter);
         }
     }
 

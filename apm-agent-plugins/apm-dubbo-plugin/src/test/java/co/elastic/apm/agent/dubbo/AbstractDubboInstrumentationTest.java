@@ -55,7 +55,7 @@ public abstract class AbstractDubboInstrumentationTest extends AbstractInstrumen
 
     @BeforeEach
     void startRootTransaction() {
-        when(coreConfig.getCaptureBody()).thenReturn(CoreConfiguration.EventType.OFF);
+        when(coreConfigg.getCaptureBody()).thenReturn(CoreConfiguration.EventType.OFF);
         tracer.startRootTransaction(Thread.currentThread().getContextClassLoader()).withName("transaction").activate();
     }
 
