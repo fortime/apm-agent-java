@@ -194,9 +194,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
             }
 
             Span span = tracer.getActiveExitSpan();
-            if (span == null ||
-                !HESSIAN_SUBTYPE.equals(span.getSubtype()) ||
-                !spanSet.contains(span)) {
+            if (span == null || !spanSet.contains(span)) {
                 return;
             }
 
@@ -252,9 +250,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
             }
 
             Span span = tracer.getActiveExitSpan();
-            if (span == null ||
-                !HESSIAN_SUBTYPE.equals(span.getSubtype()) ||
-                !spanSet.contains(span)) {
+            if (span == null || !spanSet.contains(span)) {
                 return;
             }
             TextHeaderSetter<HessianConnection> headerSetter = helperManager.getForClassLoaderOfClass(
