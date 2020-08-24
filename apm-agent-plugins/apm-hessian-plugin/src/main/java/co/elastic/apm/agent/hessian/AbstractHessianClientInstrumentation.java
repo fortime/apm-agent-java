@@ -243,8 +243,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
         }
 
         @Advice.OnMethodEnter(suppress = Throwable.class)
-        public static void onAddRequestHeaders(@Advice.This HessianProxy thiz,
-                                               @Advice.Argument(0) HessianConnection conn) {
+        public static void onAddRequestHeaders(@Advice.Argument(0) HessianConnection conn) {
             if (tracer == null) {
                 return;
             }
