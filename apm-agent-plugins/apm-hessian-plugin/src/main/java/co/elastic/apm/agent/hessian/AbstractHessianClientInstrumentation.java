@@ -51,9 +51,10 @@ import com.blogspot.mydailyjava.weaklockfree.WeakConcurrentSet;
 import com.caucho.hessian.client.HessianConnection;
 import com.caucho.hessian.client.HessianProxy;
 
-import co.elastic.apm.agent.bci.HelperClassManager;
 import co.elastic.apm.agent.bci.VisibleForAdvice;
-import co.elastic.apm.agent.impl.ElasticApmTracer;
+import co.elastic.apm.agent.hessian.helper.HessianHeaderSetter;
+import co.elastic.apm.agent.impl.GlobalTracer;
+import co.elastic.apm.agent.impl.Tracer;
 import co.elastic.apm.agent.impl.context.Destination;
 import co.elastic.apm.agent.impl.transaction.AbstractSpan;
 import co.elastic.apm.agent.impl.transaction.Span;
@@ -75,12 +76,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
     public static final String EXTERNAL_TYPE = "external";
 
     @VisibleForAdvice
-    public static ElasticApmTracer tracer;
-
-    @VisibleForAdvice
-    public AbstractHessianClientInstrumentation(ElasticApmTracer tracer) {
-        AbstractHessianClientInstrumentation.tracer = tracer;
-    }
+    public static Tracer tracer = GlobalTracer.get();
 
     @Override
     public ElementMatcher<? super NamedElement> getTypeMatcherPreFilter() {
@@ -95,10 +91,6 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
 
     public static class HessianProxyInvokeInstrumentation extends AbstractHessianClientInstrumentation {
 
-        public HessianProxyInvokeInstrumentation(ElasticApmTracer tracer) {
-            super(tracer);
-        }
-
         @Override
         public ElementMatcher<? super MethodDescription> getMethodMatcher() {
             return named("invoke")
@@ -108,13 +100,10 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
         }
 
         @Nullable
-        @OnMethodEnter(suppress = Throwable.class)
-        private static Span onEnter(
+        @OnMethodEnter(suppress = Throwable.class, inline = false)
+        private static Object onEnter(
             @Advice.FieldValue("_mangleMap") WeakHashMap<Method, String> mangleMap,
             @Advice.Argument(1) Method method) {
-            if (tracer == null) {
-                return null;
-            }
 
             AbstractSpan<?> traceContext = tracer.getActive();
             if (traceContext == null) {
@@ -149,6 +138,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
             if (span == null) {
                 return null;
             }
+            logger.debug("createExitSpan");
             spanSet.add(span);
             span.withType(EXTERNAL_TYPE)
                 .withSubtype(HESSIAN_SUBTYPE);
@@ -156,10 +146,11 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
             return span.activate();
         }
 
-        @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
-        public static void onExit(@Nullable @Advice.Enter Span span, @Nullable @Advice.Thrown Throwable t) {
-
-            if (span != null) {
+        @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class, inline = false)
+        public static void onExit(@Nullable @Advice.Enter Object spanObj,
+                                  @Nullable @Advice.Thrown Throwable t) {
+            if (spanObj != null) {
+                Span span = (Span) spanObj;
                 span.captureException(t);
                 spanSet.remove(span);
                 span.deactivate().end();
@@ -170,10 +161,6 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
     // update span name
     public static class HessianProxySendInstrumentation extends AbstractHessianClientInstrumentation {
 
-        public HessianProxySendInstrumentation(ElasticApmTracer tracer) {
-            super(tracer);
-        }
-
         @Override
         public ElementMatcher<? super MethodDescription> getMethodMatcher() {
             return named("sendRequest")
@@ -182,21 +169,20 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 .and(returns(hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
         }
 
-        @Advice.OnMethodEnter(suppress = Throwable.class)
+        @Advice.OnMethodEnter(suppress = Throwable.class, inline = false)
         public static void onSendRequest(
             @Advice.This HessianProxy thiz,
             @Advice.FieldValue("_type") Class<?> type,
             @Advice.Argument(0) String methodName) {
             logger.debug("enter");
 
-            if (tracer == null) {
-                return;
-            }
-
             Span span = tracer.getActiveExitSpan();
-            if (span == null || !spanSet.contains(span)) {
+            // ok to set name of span created by other framework.
+            if (span == null) {
                 return;
             }
+            span.withType(EXTERNAL_TYPE)
+                .withSubtype(HESSIAN_SUBTYPE);
 
             URL url = thiz.getURL();
             if (url != null) {
@@ -224,16 +210,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
     // propagateTraceContext
     public static class HessianProxyAddHeaderInstrumentation extends AbstractHessianClientInstrumentation {
         @VisibleForAdvice
-        public static HelperClassManager<TextHeaderSetter<HessianConnection>> helperManager;
-
-        public HessianProxyAddHeaderInstrumentation(ElasticApmTracer tracer) {
-            super(tracer);
-        }
-
-        public static void init(ElasticApmTracer tracer) {
-            helperManager = HelperClassManager.ForAnyClassLoader.of(tracer,
-                                                                    "co.elastic.apm.agent.hessian.helper.HessianHeaderSetter");
-        }
+        public static TextHeaderSetter<HessianConnection> headerSetter = new HessianHeaderSetter();
 
         @Override
         public ElementMatcher<? super MethodDescription> getMethodMatcher() {
@@ -242,21 +219,14 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 .and(takesArgument(0, hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
         }
 
-        @Advice.OnMethodEnter(suppress = Throwable.class)
+        @Advice.OnMethodEnter(suppress = Throwable.class, inline = false)
         public static void onAddRequestHeaders(@Advice.Argument(0) HessianConnection conn) {
-            if (tracer == null) {
-                return;
-            }
 
             Span span = tracer.getActiveExitSpan();
             if (span == null || !spanSet.contains(span)) {
                 return;
             }
-            TextHeaderSetter<HessianConnection> headerSetter = helperManager.getForClassLoaderOfClass(
-                HessianConnection.class);
-            if (headerSetter == null) {
-                return;
-            }
+
             span.propagateTraceContext(conn, headerSetter);
         }
     }

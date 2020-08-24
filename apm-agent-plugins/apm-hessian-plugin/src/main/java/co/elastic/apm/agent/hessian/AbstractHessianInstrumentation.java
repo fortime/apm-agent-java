@@ -57,6 +57,11 @@ public abstract class AbstractHessianInstrumentation extends TracerAwareInstrume
             classLoaderCanLoadClass("com.caucho.hessian.HessianUnshared"));
     }
 
+    @Override
+    public boolean indyPlugin() {
+        return true;
+    }
+
     @VisibleForAdvice
     public static void setName(AbstractSpan<?> span, String className, @Nullable String methodName) {
 

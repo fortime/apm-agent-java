@@ -43,6 +43,7 @@ import com.caucho.hessian.server.HessianSkeleton;
 import co.elastic.apm.agent.bci.VisibleForAdvice;
 import co.elastic.apm.agent.impl.ElasticApmTracer;
 import co.elastic.apm.agent.impl.GlobalTracer;
+import co.elastic.apm.agent.impl.Tracer;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 
 /**
@@ -54,10 +55,9 @@ public class HessianServerInstrumentation extends AbstractHessianInstrumentation
     public static final Logger logger = LoggerFactory.getLogger(HessianServerInstrumentation.class);
 
     @VisibleForAdvice
-    public static  ElasticApmTracer tracer;
+    public static Tracer tracer = GlobalTracer.get();
 
-    public HessianServerInstrumentation(ElasticApmTracer tracer) {
-        HessianServerInstrumentation.tracer = tracer;
+    public HessianServerInstrumentation() {
     }
 
     @Override
@@ -78,13 +78,10 @@ public class HessianServerInstrumentation extends AbstractHessianInstrumentation
 
 
 
-    @Advice.OnMethodExit(suppress = Throwable.class)
+    @Advice.OnMethodExit(suppress = Throwable.class, inline = false)
     public static void onExit(@Advice.This final HessianSkeleton thiz,
                               @Advice.Argument(1) final AbstractHessianInput in) {
 //        logger.debug("HessianServerInstrumentation01");
-        if (tracer == null) {
-            return;
-        }
         if (!tracer.isRunning()) {
             return;
         }
