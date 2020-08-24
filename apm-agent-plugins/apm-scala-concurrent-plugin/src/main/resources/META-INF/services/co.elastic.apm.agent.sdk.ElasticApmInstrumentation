@@ -1,2 +1,4 @@
 co.elastic.apm.agent.scala.concurrent.FutureInstrumentation$ConstructorInstrumentation
 co.elastic.apm.agent.scala.concurrent.FutureInstrumentation$RunInstrumentation
+co.elastic.apm.agent.scala.concurrent.Future2_10_Instrumentation$ConstructorInstrumentation
+co.elastic.apm.agent.scala.concurrent.Future2_10_Instrumentation$RunInstrumentation

@@ -42,7 +42,7 @@ import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
 import static net.bytebuddy.matcher.ElementMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.returns;
 
-public abstract class FutureInstrumentation extends TracerAwareInstrumentation {
+public abstract class Future2_10_Instrumentation extends TracerAwareInstrumentation {
 
     @VisibleForAdvice
     @SuppressWarnings("WeakerAccess")
@@ -59,7 +59,7 @@ public abstract class FutureInstrumentation extends TracerAwareInstrumentation {
 
         @Override
         public ElementMatcher<? super TypeDescription> getTypeMatcher() {
-            return named("scala.concurrent.impl.Promise$Transformation");
+            return named("scala.concurrent.impl.CallbackRunnable");
         }
 
         @Override
@@ -71,7 +71,7 @@ public abstract class FutureInstrumentation extends TracerAwareInstrumentation {
         public static void onExit(@Advice.This Object thiz) {
             final AbstractSpan<?> context = tracer.getActive();
             if (context != null) {
-                promisesToContext.put(thiz, context);
+                FutureInstrumentation.promisesToContext.put(thiz, context);
                 // this span might be ended before the Promise$Transformation#run method starts
                 // we have to avoid that this span gets recycled, even in the above mentioned case
                 context.incrementReferences();
@@ -84,7 +84,7 @@ public abstract class FutureInstrumentation extends TracerAwareInstrumentation {
 
         @Override
         public ElementMatcher<? super TypeDescription> getTypeMatcher() {
-            return named("scala.concurrent.impl.Promise$Transformation");
+            return named("scala.concurrent.impl.CallbackRunnable");
         }
 
         @Override
@@ -95,7 +95,7 @@ public abstract class FutureInstrumentation extends TracerAwareInstrumentation {
         @VisibleForAdvice
         @Advice.OnMethodEnter(suppress = Throwable.class)
         public static void onEnter(@Advice.This Object thiz, @Nullable @Advice.Local("context") AbstractSpan<?> context) {
-            context = promisesToContext.remove(thiz);
+            context = FutureInstrumentation.promisesToContext.remove(thiz);
             if (context != null) {
                 context.activate();
                 // decrements the reference we incremented to avoid that the parent context gets recycled before the promise is run
