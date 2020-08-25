@@ -51,14 +51,10 @@ import co.elastic.apm.agent.impl.transaction.Transaction;
  */
 public class HessianServerInstrumentation extends AbstractHessianInstrumentation {
 
-    @VisibleForAdvice
     public static final Logger logger = LoggerFactory.getLogger(HessianServerInstrumentation.class);
 
-    @VisibleForAdvice
     public static Tracer tracer = GlobalTracer.get();
 
-    public HessianServerInstrumentation() {
-    }
 
     @Override
     public ElementMatcher<? super TypeDescription> getTypeMatcher() {
@@ -67,9 +63,6 @@ public class HessianServerInstrumentation extends AbstractHessianInstrumentation
 
     @Override
     public ElementMatcher<? super MethodDescription> getMethodMatcher() {
-//        public void invoke(Object service,
-//            AbstractHessianInput in,
-//            AbstractHessianOutput out)
         return named("invoke")
             .and(takesArguments(3))
             .and(takesArgument(1, hasSuperType(named("com.caucho.hessian.io.AbstractHessianInput"))))

@@ -54,6 +54,10 @@ public abstract class Future2_10_Instrumentation extends TracerAwareInstrumentat
     public Collection<String> getInstrumentationGroupNames() {
         return Arrays.asList("scala-future", "experimental");
     }
+    @Override
+    public boolean indyPlugin() {
+        return false;
+    }
 
     public static class ConstructorInstrumentation extends Future2_10_Instrumentation {
 

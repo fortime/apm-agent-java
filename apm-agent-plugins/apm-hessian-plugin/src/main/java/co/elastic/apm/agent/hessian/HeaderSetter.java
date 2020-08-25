@@ -22,13 +22,20 @@
  * under the License.
  * #L%
  */
-package co.elastic.apm.agent.hessian.helper;
+package co.elastic.apm.agent.hessian;
 
 import com.caucho.hessian.client.HessianConnection;
 
 import co.elastic.apm.agent.impl.transaction.TextHeaderSetter;
 
-public class HessianHeaderSetter implements TextHeaderSetter<HessianConnection> {
+public class HeaderSetter implements TextHeaderSetter<HessianConnection> {
+
+    private static final HeaderSetter INSTANCE = new HeaderSetter();
+
+    public static HeaderSetter instance() {
+        return INSTANCE;
+    }
+
     @Override
     public void setHeader(String headerName, String headerValue,
                           HessianConnection carrier) {

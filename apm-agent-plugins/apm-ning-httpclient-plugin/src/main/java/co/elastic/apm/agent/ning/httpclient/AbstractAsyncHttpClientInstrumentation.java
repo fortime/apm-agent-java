@@ -70,6 +70,11 @@ public abstract class AbstractAsyncHttpClientInstrumentation extends TracerAware
     @VisibleForAdvice
     public static final WeakConcurrentMap<AsyncHandler<?>, Span> handlerSpanMap = WeakMapSupplier.createMap();
 
+    @Override
+    public boolean indyPlugin() {
+        return false;
+    }
+
     @VisibleForAdvice
     public static final List<Class<? extends ElasticApmInstrumentation>> ASYNC_HANDLER_INSTRUMENTATIONS = Arrays.<Class<? extends ElasticApmInstrumentation>>asList(
         AsyncHandlerOnCompletedInstrumentation.class,

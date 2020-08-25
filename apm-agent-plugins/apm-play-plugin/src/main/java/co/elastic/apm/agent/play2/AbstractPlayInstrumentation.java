@@ -35,4 +35,9 @@ public abstract class AbstractPlayInstrumentation extends TracerAwareInstrumenta
     public Collection<String> getInstrumentationGroupNames() {
         return Arrays.asList("play", "experimental1");
     }
+
+    @Override
+    public boolean indyPlugin() {
+        return false;
+    }
 }

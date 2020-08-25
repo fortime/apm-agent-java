@@ -37,14 +37,12 @@ import javax.annotation.Nullable;
 import net.bytebuddy.matcher.ElementMatcher.Junction;
 
 import co.elastic.apm.agent.bci.TracerAwareInstrumentation;
-import co.elastic.apm.agent.bci.VisibleForAdvice;
 import co.elastic.apm.agent.impl.transaction.AbstractSpan;
 
 public abstract class AbstractHessianInstrumentation extends TracerAwareInstrumentation {
-    @VisibleForAdvice
     public static final String FRAMEWORK_NAME = "hessian";
-    @VisibleForAdvice
     public static final String HESSIAN_SUBTYPE = "hessian";
+    public static final String HTTP_SUBTYPE = "http";
 
     @Override
     public Collection<String> getInstrumentationGroupNames() {
@@ -57,12 +55,6 @@ public abstract class AbstractHessianInstrumentation extends TracerAwareInstrume
             classLoaderCanLoadClass("com.caucho.hessian.HessianUnshared"));
     }
 
-    @Override
-    public boolean indyPlugin() {
-        return true;
-    }
-
-    @VisibleForAdvice
     public static void setName(AbstractSpan<?> span, String className, @Nullable String methodName) {
 
         final StringBuilder name = span.getAndOverrideName(PRIO_HIGH_LEVEL_FRAMEWORK);
