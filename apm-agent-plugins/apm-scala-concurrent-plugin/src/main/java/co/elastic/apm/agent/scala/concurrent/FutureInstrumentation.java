@@ -86,7 +86,7 @@ public abstract class FutureInstrumentation extends TracerAwareInstrumentation {
 
     }
 
-    public static class RunInstrumentation extends Future2_10_Instrumentation {
+    public static class RunInstrumentation extends FutureInstrumentation {
 
         @Override
         public ElementMatcher<? super TypeDescription> getTypeMatcher() {

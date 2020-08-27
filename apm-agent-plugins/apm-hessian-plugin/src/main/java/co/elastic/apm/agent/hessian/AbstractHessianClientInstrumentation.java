@@ -85,7 +85,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 .and(returns(hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
         }
 
-        @OnMethodEnter(suppress = Throwable.class)
+        @OnMethodEnter(suppress = Throwable.class, inline = false)
         private static void onEnter(
             @Advice.FieldValue("_type") Class<?> type,
             @Advice.Argument(0) String methodName
@@ -121,7 +121,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 .and(takesArgument(1, named("java.lang.reflect.Method")));
         }
 
-        @OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
+        @OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class, inline = false)
         public static void afterInvoke(@Nullable @Advice.Thrown Throwable t) {
             Span span = inFlightSpans.getAndRemove();
             if (span != null) {
@@ -145,7 +145,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 .and(takesArgument(0, hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
         }
 
-        @Advice.OnMethodEnter(suppress = Throwable.class)
+        @Advice.OnMethodEnter(suppress = Throwable.class, inline = false)
         public static void onAddRequestHeaders(@Advice.Argument(0) HessianConnection conn) {
             if (tracer.getActive() == null) {
                 return;
