@@ -86,7 +86,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
         }
 
         @OnMethodEnter(suppress = Throwable.class, inline = false)
-        private static void onEnter(
+        public static void onEnter(
             @Advice.FieldValue("_type") Class<?> type,
             @Advice.Argument(0) String methodName
         ) {
