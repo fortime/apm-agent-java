@@ -61,7 +61,7 @@ import co.elastic.apm.agent.sdk.state.GlobalThreadLocal;
  */
 public abstract class AbstractHessianClientInstrumentation extends AbstractHessianInstrumentation {
 
-    public static final GlobalThreadLocal<Span> inFlightSpans = GlobalThreadLocal.get(
+    public static final GlobalThreadLocal<Object> inFlightSpans = GlobalThreadLocal.get(
         AbstractHessianClientInstrumentation.class, "inFlightSpans");
 
     public static final Logger logger = LoggerFactory.getLogger(AbstractHessianClientInstrumentation.class);
@@ -123,7 +123,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
 
         @OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class, inline = false)
         public static void afterInvoke(@Nullable @Advice.Thrown Throwable t) {
-            Span span = inFlightSpans.getAndRemove();
+            Span span = (Span) inFlightSpans.getAndRemove();
             if (span != null) {
                 span.captureException(t);
                 span.captureException(t).deactivate().end();
@@ -151,7 +151,7 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 return;
             }
 
-            Span span = inFlightSpans.get();
+            Span span = (Span) inFlightSpans.get();
             if (span == null) {
                 return;
             }
