@@ -25,9 +25,7 @@
 package co.elastic.apm.agent.hessian;
 
 import static net.bytebuddy.matcher.ElementMatchers.hasSuperType;
-import static net.bytebuddy.matcher.ElementMatchers.nameContains;
 import static net.bytebuddy.matcher.ElementMatchers.named;
-import static net.bytebuddy.matcher.ElementMatchers.not;
 import static net.bytebuddy.matcher.ElementMatchers.returns;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
@@ -40,13 +38,11 @@ import org.slf4j.LoggerFactory;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.asm.Advice.OnMethodEnter;
 import net.bytebuddy.asm.Advice.OnMethodExit;
-import net.bytebuddy.description.NamedElement;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 
 import com.caucho.hessian.client.HessianConnection;
-import com.caucho.hessian.client.HessianProxy;
 
 import co.elastic.apm.agent.impl.GlobalTracer;
 import co.elastic.apm.agent.impl.Tracer;
@@ -54,7 +50,14 @@ import co.elastic.apm.agent.impl.transaction.Span;
 import co.elastic.apm.agent.sdk.state.GlobalThreadLocal;
 
 /**
- * create exit span
+ * create exit span.
+ * invoke chain:
+ *
+ *   -->invoke
+ *        --> sendRequest  #create span
+ *          -->addRequestHeaders #propagate
+ *   <--(invoke exit)  #end span
+ *
  */
 public abstract class AbstractHessianClientInstrumentation extends AbstractHessianInstrumentation {
 
@@ -70,27 +73,6 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
     @Override
     public ElementMatcher<? super TypeDescription> getTypeMatcher() {
         return named("com.caucho.hessian.client.HessianProxy");
-    }
-
-    public static class EndSpanInstrumentation extends AbstractHessianClientInstrumentation {
-
-        @Override
-        public ElementMatcher<? super MethodDescription> getMethodMatcher() {
-            return named("invoke")
-                .and(takesArguments(3))
-                .and(takesArgument(0, named("java.lang.Object")))
-                .and(takesArgument(1, named("java.lang.reflect.Method")));
-        }
-
-        @OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
-        public static void afterInvoke(@Nullable @Advice.Thrown Throwable t) {
-            Span span = inFlightSpans.getAndRemove();
-            if (span != null) {
-                span.captureException(t);
-                span.captureException(t).deactivate().end();
-            }
-        }
-
     }
 
     public static class CreateSpanInstrumentation extends AbstractHessianClientInstrumentation {
@@ -124,6 +106,27 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                     setName(span, apiClassName, methodName);
                 }
                 span.activate();
+            }
+        }
+
+    }
+
+    public static class EndSpanInstrumentation extends AbstractHessianClientInstrumentation {
+
+        @Override
+        public ElementMatcher<? super MethodDescription> getMethodMatcher() {
+            return named("invoke")
+                .and(takesArguments(3))
+                .and(takesArgument(0, named("java.lang.Object")))
+                .and(takesArgument(1, named("java.lang.reflect.Method")));
+        }
+
+        @OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
+        public static void afterInvoke(@Nullable @Advice.Thrown Throwable t) {
+            Span span = inFlightSpans.getAndRemove();
+            if (span != null) {
+                span.captureException(t);
+                span.captureException(t).deactivate().end();
             }
         }
 
