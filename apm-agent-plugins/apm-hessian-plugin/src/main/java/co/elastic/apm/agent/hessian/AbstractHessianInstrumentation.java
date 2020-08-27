@@ -42,7 +42,6 @@ import co.elastic.apm.agent.impl.transaction.AbstractSpan;
 public abstract class AbstractHessianInstrumentation extends TracerAwareInstrumentation {
     public static final String FRAMEWORK_NAME = "hessian";
     public static final String HESSIAN_SUBTYPE = "hessian";
-    public static final String HTTP_SUBTYPE = "http";
 
     @Override
     public Collection<String> getInstrumentationGroupNames() {

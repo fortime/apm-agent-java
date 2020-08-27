@@ -38,24 +38,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.bytebuddy.asm.Advice;
+import net.bytebuddy.asm.Advice.OnMethodEnter;
+import net.bytebuddy.asm.Advice.OnMethodExit;
 import net.bytebuddy.description.NamedElement;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 
-import com.blogspot.mydailyjava.weaklockfree.WeakConcurrentMap;
 import com.caucho.hessian.client.HessianConnection;
+import com.caucho.hessian.client.HessianProxy;
 
 import co.elastic.apm.agent.impl.GlobalTracer;
 import co.elastic.apm.agent.impl.Tracer;
 import co.elastic.apm.agent.impl.transaction.Span;
-import co.elastic.apm.agent.sdk.weakmap.WeakMapSupplier;
+import co.elastic.apm.agent.sdk.state.GlobalThreadLocal;
 
 /**
  * create exit span
  */
 public abstract class AbstractHessianClientInstrumentation extends AbstractHessianInstrumentation {
-    public static final WeakConcurrentMap<HessianConnection, Span> inFlightSpans = WeakMapSupplier.createMap();
+
+    public static final GlobalThreadLocal<Span> inFlightSpans = GlobalThreadLocal.get(
+        AbstractHessianClientInstrumentation.class, "inFlightSpans");
 
     public static final Logger logger = LoggerFactory.getLogger(AbstractHessianClientInstrumentation.class);
 
@@ -63,84 +67,33 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
 
     public static Tracer tracer = GlobalTracer.get();
 
-    public static class CreateSpanInstrumentation extends AbstractHessianClientInstrumentation {
+    @Override
+    public ElementMatcher<? super TypeDescription> getTypeMatcher() {
+        return named("com.caucho.hessian.client.HessianProxy");
+    }
 
-        @Nullable
-        @Advice.OnMethodEnter(suppress = Throwable.class, inline = false)
-        public static Object enter(@Advice.This HessianConnection thiz,
-                                   @Advice.Origin String signature) {
-            if (tracer.getActive() == null) {
-                return null;
-            }
-
-            Span span = inFlightSpans.get(thiz);
-            logger.debug("enter: {}, {}", signature, span);
-            boolean connected = thiz.getStatusCode() > 0;
-            if (span == null && !connected) {
-                span = tracer.getActive().createExitSpan();
-
-                if (span != null) {
-                    span.withType(EXTERNAL_TYPE)
-                        .withSubtype(HESSIAN_SUBTYPE);
-                    span.propagateTraceContext(thiz, HeaderSetter.instance());
-
-                }
-            }
-            if (span != null) {
-                span.activate();
-            }
-            return span;
-        }
-
-        @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class, inline = false)
-        public static void exit(@Advice.This HessianConnection thiz,
-                                @Nullable @Advice.Thrown Throwable t,
-                                @Nullable @Advice.Enter Object spanObject,
-                                @Advice.Origin String signature) {
-            Span span = (Span) spanObject;
-            logger.debug("exit1: {},{}", signature, span);
-            if (span == null) {
-                return;
-            }
-            span.deactivate();
-            int responseCode = thiz.getStatusCode();
-            logger.debug("exit2 {},{}", signature, responseCode);
-            if (responseCode > 0) {
-                inFlightSpans.remove(thiz);
-                // if the response code is set, the connection has been established via getOutputStream
-                // if the response code is unset even after getOutputStream has been called, there will be an exception
-                span.getContext().getHttp().withStatusCode(responseCode);
-                span.captureException(t).end();
-            } else if (t != null) {
-                inFlightSpans.remove(thiz);
-                span.captureException(t).end();
-            } else {
-                // if connect or getOutputStream has been called we can't end the span right away
-                // we have to store associate it with thiz HttpURLConnection instance and end once getInputStream has been called
-                // note that this could happen on another thread
-                inFlightSpans.put(thiz, span);
-            }
-        }
-
-        @Override
-        public ElementMatcher<? super NamedElement> getTypeMatcherPreFilter() {
-            return nameContains("Connection").and(not(nameContains("Wrapper")));
-        }
-
-        @Override
-        public ElementMatcher<? super TypeDescription> getTypeMatcher() {
-            return hasSuperType(named("com.caucho.hessian.client.HessianConnection"));
-        }
+    public static class EndSpanInstrumentation extends AbstractHessianClientInstrumentation {
 
         @Override
         public ElementMatcher<? super MethodDescription> getMethodMatcher() {
-            return named("getOutputStream").and(takesArguments(0))
-                                           .or(named("getInputStream").and(takesArguments(0)));
+            return named("invoke")
+                .and(takesArguments(3))
+                .and(takesArgument(0, named("java.lang.Object")))
+                .and(takesArgument(1, named("java.lang.reflect.Method")));
         }
+
+        @OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
+        public static void afterInvoke(@Nullable @Advice.Thrown Throwable t) {
+            Span span = inFlightSpans.getAndRemove();
+            if (span != null) {
+                span.captureException(t);
+                span.captureException(t).deactivate().end();
+            }
+        }
+
     }
 
-    // update span name
-    public static class HessianProxySendInstrumentation extends AbstractHessianClientInstrumentation {
+    public static class CreateSpanInstrumentation extends AbstractHessianClientInstrumentation {
 
         @Override
         public ElementMatcher<? super MethodDescription> getMethodMatcher() {
@@ -150,33 +103,57 @@ public abstract class AbstractHessianClientInstrumentation extends AbstractHessi
                 .and(returns(hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
         }
 
-        @Advice.OnMethodExit(suppress = Throwable.class, inline = false)
-        public static void afterSendRequest(
+        @OnMethodEnter(suppress = Throwable.class)
+        private static void onEnter(
             @Advice.FieldValue("_type") Class<?> type,
-            @Advice.Argument(0) String methodName,
-            @Nullable @Advice.Return(readOnly = true) HessianConnection hessianConnection
+            @Advice.Argument(0) String methodName
         ) {
-            logger.debug("afterSendRequest1");
-            if (hessianConnection == null) {
+
+            if (tracer.getActive() == null) {
                 return;
             }
-            Span span = inFlightSpans.get(hessianConnection);
 
-            logger.debug("afterSendRequest2: {}", span);
+            Span span = tracer.getActive().createExitSpan();
+            if (span != null) {
+                inFlightSpans.set(span);
+                span.withType(EXTERNAL_TYPE)
+                    .withSubtype(HESSIAN_SUBTYPE);
+
+                final String apiClassName = type != null ? type.getName() : null;
+                if (apiClassName != null && !apiClassName.isEmpty()) {
+                    setName(span, apiClassName, methodName);
+                }
+                span.activate();
+            }
+        }
+
+    }
+
+    /**
+     * propagateTraceContext.
+     * need to add before actual send request, so can not be set when  HessianProxy#sendRequest exited
+     */
+    public static class PropagateTraceContextInstrumentation extends AbstractHessianClientInstrumentation {
+
+        @Override
+        public ElementMatcher<? super MethodDescription> getMethodMatcher() {
+            return named("addRequestHeaders")
+                .and(takesArguments(1))
+                .and(takesArgument(0, hasSuperType(named("com.caucho.hessian.client.HessianConnection"))));
+        }
+
+        @Advice.OnMethodEnter(suppress = Throwable.class)
+        public static void onAddRequestHeaders(@Advice.Argument(0) HessianConnection conn) {
+            if (tracer.getActive() == null) {
+                return;
+            }
+
+            Span span = inFlightSpans.get();
             if (span == null) {
                 return;
             }
-
-            final String apiClassName = type != null ? type.getName() : null;
-            if (apiClassName != null && !apiClassName.isEmpty()) {
-                setName(span, apiClassName, methodName);
-            }
+            span.propagateTraceContext(conn, HeaderSetter.instance());
         }
-    }
-
-    @Override
-    public ElementMatcher<? super TypeDescription> getTypeMatcher() {
-        return named("com.caucho.hessian.client.HessianProxy");
     }
 
 }
