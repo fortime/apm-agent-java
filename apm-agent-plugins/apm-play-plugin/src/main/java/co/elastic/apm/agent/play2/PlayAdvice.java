@@ -57,7 +57,6 @@ public class PlayAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static Transaction onEnter(@Advice.Argument(0) final Request<?> request) {
         final ElasticApmTracer tracer = GlobalTracer.getTracerImpl();
-        logger.info("TT1 enter");
         if (tracer == null) {
             return null;
         }
@@ -77,6 +76,7 @@ public class PlayAdvice {
             return null;
         }
 
+        transactionHelper.fillTransactionName(transaction, request);
         transactionHelper.fillRequestContext(transaction, request);
         transaction.setFrameworkName(FRAMEWORK_NAME);
         return transaction;
@@ -105,7 +105,6 @@ public class PlayAdvice {
                                       req.method(), false);
         }
         transaction.deactivate();
-        transactionHelper.fillSpanName(transaction,req);
     }
 
 }

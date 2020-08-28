@@ -10,6 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>apm-play-plugin</artifactId>
+    <name>${project.groupId}:${project.artifactId}</name>
 
     <properties>
         <apm-agent-parent.base.dir>${project.basedir}/../..</apm-agent-parent.base.dir>
@@ -28,6 +29,12 @@
         <dependency>
             <groupId>com.typesafe.play</groupId>
             <artifactId>play_2.10</artifactId>
+            <version>${play2.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe.play</groupId>
+            <artifactId>routes-compiler_2.10</artifactId>
             <version>${play2.version}</version>
             <scope>provided</scope>
         </dependency>

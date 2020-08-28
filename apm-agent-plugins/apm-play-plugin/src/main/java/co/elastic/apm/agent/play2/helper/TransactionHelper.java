@@ -62,5 +62,5 @@ public interface TransactionHelper<RequestT> {
                                                           RequestT request);
 
     //    other helper
-    Transaction fillSpanName(Transaction transaction, RequestT request);
+    void fillTransactionName(Transaction transaction, RequestT request);
 }

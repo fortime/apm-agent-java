@@ -475,18 +475,16 @@ public class TransactionHelperImpl implements TransactionHelper<play.api.mvc.Req
 
     //    other helper
     @Override
-    public Transaction fillSpanName(final Transaction transaction, final play.api.mvc.Request<?> request) {
+    public void fillTransactionName(final Transaction transaction, final play.api.mvc.Request<?> request) {
         Option<String> pathOption = request.tags().get("ROUTE_PATTERN");
-//        request.path()
         if (!pathOption.isEmpty()) {
-            String path = pathOption.get();
-            StringBuilder spanName = transaction.getAndOverrideName(AbstractSpan.PRIO_DEFAULT);
-            if (spanName != null) {
-                spanName.append(request.method()).append(' ').append(path);
+            // override name only if pathOption is not empty, high level than unknow route
+            StringBuilder transactionName = transaction.getAndOverrideName(PRIO_DEFAULT+1);
+            if (transactionName == null) {
+                return;
             }
-            return transaction.withName(request.method() + " " + path, PRIO_LOW_LEVEL_FRAMEWORK);
+            transactionName.append(request.method()).append(' ').append(pathOption.get());
         }
-        return transaction;
     }
 
 }

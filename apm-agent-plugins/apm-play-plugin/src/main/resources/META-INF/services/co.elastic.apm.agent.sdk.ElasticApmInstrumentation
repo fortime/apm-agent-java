@@ -1,2 +1,4 @@
 co.elastic.apm.agent.play2.PlayInstrumentation
+co.elastic.apm.agent.play2.SpPlayInstrumentation$PathPatternInstrumentation
+co.elastic.apm.agent.play2.SpPlayInstrumentation$TransactionNameInstrumentation
 
