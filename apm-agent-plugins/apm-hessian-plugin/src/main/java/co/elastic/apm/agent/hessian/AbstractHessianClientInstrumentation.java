@@ -52,11 +52,12 @@ import co.elastic.apm.agent.sdk.state.GlobalThreadLocal;
 /**
  * create exit span.
  * invoke chain:
- *
+ * {@literal
  *   -->invoke
  *        --> sendRequest  #create span
  *          -->addRequestHeaders #propagate
  *   <--(invoke exit)  #end span
+ * }
  *
  */
 public abstract class AbstractHessianClientInstrumentation extends AbstractHessianInstrumentation {
