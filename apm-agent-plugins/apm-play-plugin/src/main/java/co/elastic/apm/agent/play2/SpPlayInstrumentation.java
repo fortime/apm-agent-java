@@ -104,6 +104,9 @@ public abstract class SpPlayInstrumentation extends AbstractPlayInstrumentation 
         public static void onEnter(@Advice.This Object thiz,
                 @Advice.Argument(1) RequestHeader req) {
             ElasticApmTracer tracer = GlobalTracer.getTracerImpl();
+            if (tracer == null) {
+                return;
+            }
             Transaction transaction = tracer.currentTransaction();
             if (transaction == null) {
                 // ignore if there is no active transaction
