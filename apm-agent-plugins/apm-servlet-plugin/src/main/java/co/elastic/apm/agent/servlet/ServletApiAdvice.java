@@ -32,6 +32,7 @@ import co.elastic.apm.agent.impl.context.Request;
 import co.elastic.apm.agent.impl.context.Response;
 import co.elastic.apm.agent.impl.transaction.AbstractSpan;
 import co.elastic.apm.agent.impl.transaction.Span;
+import co.elastic.apm.agent.impl.transaction.TraceContext;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 import co.elastic.apm.agent.sdk.state.GlobalThreadLocal;
 import co.elastic.apm.agent.servlet.helper.ServletTransactionCreationHelper;
@@ -77,7 +78,8 @@ public class ServletApiAdvice {
 
     @Nullable
     @Advice.OnMethodEnter(suppress = Throwable.class, inline = false)
-    public static Object onEnterServletService(@Advice.Argument(0) ServletRequest servletRequest) {
+    public static Object onEnterServletService(@Advice.Argument(0) ServletRequest servletRequest,
+                                               @Advice.Argument(1) ServletResponse servletResponse) {
         ElasticApmTracer tracer = GlobalTracer.getTracerImpl();
         if (tracer == null) {
             return null;
@@ -123,6 +125,14 @@ public class ServletApiAdvice {
                             }
                         }
                         transaction.setFrameworkName(FRAMEWORK_NAME);
+
+                        TraceContext traceContext = transaction.getTraceContext();
+                        if (servletResponse instanceof HttpServletResponse &&
+                                (traceContext.getParentId() == null || traceContext.getParentId().isEmpty())) {
+                            HttpServletResponse response = (HttpServletResponse) servletResponse;
+                            // set response header if there is no parent transaction
+                            response.setHeader("X-Sp-Trace-Id", traceContext.getTraceId().toString());
+                        }
 
                         servletTransactionHelper.fillRequestContext(transaction, request.getProtocol(), request.getMethod(), request.isSecure(),
                             request.getScheme(), request.getServerName(), request.getServerPort(), request.getRequestURI(), request.getQueryString(),
