@@ -26,6 +26,7 @@ package co.elastic.apm.agent.play2;
 
 import co.elastic.apm.agent.impl.ElasticApmTracer;
 import co.elastic.apm.agent.impl.GlobalTracer;
+import co.elastic.apm.agent.impl.transaction.TraceContext;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 import co.elastic.apm.agent.sdk.weakmap.WeakMapSupplier;
 import com.blogspot.mydailyjava.weaklockfree.WeakConcurrentMap;
@@ -44,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import play.api.mvc.RequestHeader;
 import play.core.Router.Routes;
+import play.mvc.Http;
 import play.router.RoutesCompiler;
 
 import static co.elastic.apm.agent.impl.transaction.AbstractSpan.PRIO_LOW_LEVEL_FRAMEWORK;
@@ -74,7 +76,6 @@ public abstract class SpPlayInstrumentation extends AbstractPlayInstrumentation 
         }
 
         @Advice.OnMethodEnter(suppress = Throwable.class)
-        // public static void onEnter(@Advice.Argument(1) RequestHeader req, @Advice.Argument(2) Routes routes) {
         public static void onEnter(@Advice.Argument(2) RoutesCompiler.Route route,
                 @Advice.Argument(3) Object refActionWrap,
                 @Advice.Argument(4) Routes routes) {
@@ -100,7 +101,6 @@ public abstract class SpPlayInstrumentation extends AbstractPlayInstrumentation 
         }
 
         @Advice.OnMethodEnter(suppress = Throwable.class)
-        // public static void onEnter(@Advice.Argument(1) RequestHeader req, @Advice.Argument(2) Routes routes) {
         public static void onEnter(@Advice.This Object thiz,
                 @Advice.Argument(1) RequestHeader req) {
             ElasticApmTracer tracer = GlobalTracer.getTracerImpl();
@@ -120,6 +120,11 @@ public abstract class SpPlayInstrumentation extends AbstractPlayInstrumentation 
             StringBuilder transactionName = transaction.getAndOverrideName(PRIO_LOW_LEVEL_FRAMEWORK);
             if (transactionName != null) {
                 transactionName.append(req.method()).append(" ").append(pathPattern);
+            }
+            TraceContext traceContext = transaction.getTraceContext();
+            if (traceContext.getParentId() == null || traceContext.getParentId().isEmpty()) {
+                // set response header if there is no parent transaction
+                Http.Context.current().response().setHeader("X-Sp-Trace-Id", traceContext.getTraceId().toString());
             }
         }
     }
