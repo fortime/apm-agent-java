@@ -26,6 +26,7 @@ package co.elastic.apm.agent.play2;
 
 import co.elastic.apm.agent.impl.ElasticApmTracer;
 import co.elastic.apm.agent.impl.GlobalTracer;
+import co.elastic.apm.agent.impl.context.web.WebConfiguration;
 import co.elastic.apm.agent.impl.transaction.TraceContext;
 import co.elastic.apm.agent.impl.transaction.Transaction;
 import co.elastic.apm.agent.sdk.weakmap.WeakMapSupplier;
@@ -122,7 +123,8 @@ public abstract class SpPlayInstrumentation extends AbstractPlayInstrumentation 
                 transactionName.append(req.method()).append(" ").append(pathPattern);
             }
             TraceContext traceContext = transaction.getTraceContext();
-            if (traceContext.getParentId() == null || traceContext.getParentId().isEmpty()) {
+            if (tracer.getConfig(WebConfiguration.class).isWriteTraceIdToResponseHeader() &&
+                    (traceContext.getParentId() == null || traceContext.getParentId().isEmpty())) {
                 // set response header if there is no parent transaction
                 Http.Context.current().response().setHeader("X-Sp-Trace-Id", traceContext.getTraceId().toString());
             }

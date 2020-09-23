@@ -30,6 +30,7 @@ import co.elastic.apm.agent.impl.GlobalTracer;
 import co.elastic.apm.agent.impl.Scope;
 import co.elastic.apm.agent.impl.context.Request;
 import co.elastic.apm.agent.impl.context.Response;
+import co.elastic.apm.agent.impl.context.web.WebConfiguration;
 import co.elastic.apm.agent.impl.transaction.AbstractSpan;
 import co.elastic.apm.agent.impl.transaction.Span;
 import co.elastic.apm.agent.impl.transaction.TraceContext;
@@ -127,7 +128,8 @@ public class ServletApiAdvice {
                         transaction.setFrameworkName(FRAMEWORK_NAME);
 
                         TraceContext traceContext = transaction.getTraceContext();
-                        if (servletResponse instanceof HttpServletResponse &&
+                        if (tracer.getConfig(WebConfiguration.class).isWriteTraceIdToResponseHeader() &&
+                                servletResponse instanceof HttpServletResponse &&
                                 (traceContext.getParentId() == null || traceContext.getParentId().isEmpty())) {
                             HttpServletResponse response = (HttpServletResponse) servletResponse;
                             // set response header if there is no parent transaction

@@ -128,6 +128,14 @@ public class WebConfiguration extends ConfigurationOptionProvider {
         .dynamic(true)
         .buildWithDefault(Collections.<WildcardMatcher>emptyList());
 
+    private final ConfigurationOption<Boolean> writeTraceIdToResponseHeader = ConfigurationOption.booleanOption()
+        .key("write_trace_id_to_response_header")
+        .configurationCategory(HTTP_CATEGORY)
+        .tags("experimental")
+        .description("If set to `true`,\n" +
+            "`trace.id` will be written to response header if there is no parent transaction of current transaction.\n")
+        .buildWithDefault(false);
+
     public List<WildcardMatcher> getIgnoreUrls() {
         return ignoreUrls.get();
     }
@@ -148,4 +156,7 @@ public class WebConfiguration extends ConfigurationOptionProvider {
         return captureContentTypes.get();
     }
 
+    public boolean isWriteTraceIdToResponseHeader() {
+        return writeTraceIdToResponseHeader.get();
+    }
 }
