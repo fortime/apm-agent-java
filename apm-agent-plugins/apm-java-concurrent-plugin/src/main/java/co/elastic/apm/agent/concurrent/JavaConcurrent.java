@@ -84,7 +84,7 @@ public class JavaConcurrent {
         if (active == null) {
             return runnable;
         }
-        if (isLambda(runnable)) {
+        if (isLambda(runnable) || isAnonRunnable(runnable)) {
             runnable = new RunnableLambdaWrapper(runnable);
         }
         captureContext(runnable, active);
@@ -151,6 +151,22 @@ public class JavaConcurrent {
 
     private static boolean isLambda(Object o) {
         return o.getClass().getName().indexOf('/') != -1;
+    }
+
+    /**
+     * An anon runnable is a runnable created by `new Runnable() {}`
+     */
+    private static boolean isAnonRunnable(Runnable r) {
+        Class<?> c = r.getClass();
+        if (!c.isAnonymousClass()) {
+            return false;
+        }
+        Class<?>[] ics = c.getInterfaces();
+        if (ics == null || ics.length != 1 || (ics[0] != Runnable.class)) {
+            // a anon runnable won't implement multiple interfaces.
+            return false;
+        }
+        return true;
     }
 
     @Nullable
