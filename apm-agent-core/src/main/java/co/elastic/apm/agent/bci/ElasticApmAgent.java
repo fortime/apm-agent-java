@@ -649,17 +649,18 @@ public class ElasticApmAgent {
 
         if (!appliedInstrumentations.contains(instrumentationClasses)) {
             synchronized (ElasticApmAgent.class) {
+                appliedInstrumentations = getOrCreate(classToInstrument);
                 ElasticApmTracer tracer = GlobalTracer.requireTracerImpl();
                 if (instrumentation == null) {
                     throw new IllegalStateException("Agent is not initialized");
                 }
 
                 if (!appliedInstrumentations.contains(instrumentationClasses)) {
+                    long begin = System.currentTimeMillis();
                     appliedInstrumentations = new HashSet<>(appliedInstrumentations);
                     appliedInstrumentations.add(instrumentationClasses);
                     // immutability guards against race conditions (for example concurrent rehash due to add and lookup)
                     appliedInstrumentations = Collections.unmodifiableSet(appliedInstrumentations);
-                    dynamicallyInstrumentedClasses.put(classToInstrument, appliedInstrumentations);
 
                     CoreConfiguration config = tracer.getConfig(CoreConfiguration.class);
                     final Logger logger = LoggerFactory.getLogger(ElasticApmAgent.class);
@@ -678,6 +679,9 @@ public class ElasticApmAgent {
                         }
                     }
                     dynamicClassFileTransformers.add(agentBuilder.installOn(instrumentation));
+                    dynamicallyInstrumentedClasses.put(classToInstrument, appliedInstrumentations);
+                    logger.trace("instrumentation {} with {}, cost is {}",
+                            classToInstrument, instrumentationClasses, System.currentTimeMillis() - begin);
                 }
             }
         }
